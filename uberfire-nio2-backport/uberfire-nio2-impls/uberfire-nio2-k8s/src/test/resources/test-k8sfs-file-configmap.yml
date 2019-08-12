@@ -20,8 +20,9 @@ metadata:
   labels:
     k8s.fs.nio.java.uberfire.org/fsobj-name-0: testDir
     k8s.fs.nio.java.uberfire.org/fsobj-name-1: testFile
-    k8s.fs.nio.java.uberfire.org/fsobj-size: 19
     k8s.fs.nio.java.uberfire.org/fsobj-type: fsobj-regular-file
+  annotations:
+    k8s.fs.nio.java.uberfire.org/fsobj-size: 19
   creationTimestamp: 1970-01-01T00:00:00Z  
 data:
   fsobj-content: This is a test file

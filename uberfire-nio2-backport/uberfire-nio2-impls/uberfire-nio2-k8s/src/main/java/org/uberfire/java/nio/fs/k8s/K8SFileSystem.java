@@ -16,6 +16,8 @@
 
 package org.uberfire.java.nio.fs.k8s;
 
+import org.uberfire.java.nio.IOException;
+import org.uberfire.java.nio.file.WatchService;
 import org.uberfire.java.nio.file.spi.FileSystemProvider;
 import org.uberfire.java.nio.fs.file.SimpleUnixFileSystem;
 
@@ -24,5 +26,10 @@ public class K8SFileSystem extends SimpleUnixFileSystem {
     K8SFileSystem(final FileSystemProvider provider, final String path) {
         super(provider, path);
         fileStore = new K8SFileStore(null);
+    }
+
+    @Override
+    public WatchService newWatchService() throws UnsupportedOperationException, IOException {
+        return new K8SWatchService(this);
     }
 }

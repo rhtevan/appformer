@@ -55,11 +55,11 @@ import org.uberfire.java.nio.fs.file.SimpleFileSystemProvider;
 import static org.kie.soup.commons.validation.PortablePreconditions.checkCondition;
 import static org.kie.soup.commons.validation.PortablePreconditions.checkNotNull;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_FSOBJ_CONTENT_KEY;
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX;
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_LABEL_FSOBJ_SIZE_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceParentDirFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getFsObjCM;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getPathByFsObjCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.isDirectory;
 
 public class K8SFileSystemProvider extends SimpleFileSystemProvider implements CloudClientFactory {
@@ -79,7 +79,7 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
                                       final OpenOption... options) throws IllegalArgumentException, 
         NoSuchFileException, IOException, SecurityException {
         checkNotNull("path", path);
-        return Channels.newInputStream(new K8SFileChannel(path));
+        return Channels.newInputStream(new K8SFileChannel(path, this));
     }
 
     @Override
@@ -87,7 +87,7 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
                                         final OpenOption... options) throws IllegalArgumentException, 
         UnsupportedOperationException, IOException, SecurityException {
         checkNotNull("path", path);
-        return Channels.newOutputStream(new K8SFileChannel(path));
+        return Channels.newOutputStream(new K8SFileChannel(path, this));
     }
 
     @Override
@@ -105,7 +105,7 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
                                               final FileAttribute<?>... attrs) 
         throws IllegalArgumentException, UnsupportedOperationException, FileAlreadyExistsException, 
             IOException, SecurityException {
-        return new K8SFileChannel(path);
+        return new K8SFileChannel(path, this);
     }
 
     @Override
@@ -137,12 +137,16 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
             throw new IOException("Directory [" + dir.toString() + "] is empty.");
         }
         
-        String dirPathString = dirCM.getMetadata().getLabels().getOrDefault(CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX, "");
+        String separator = dir.getFileSystem().getSeparator();
+        String dirPathString = getPathByFsObjCM((K8SFileSystem)fileSystem, dirCM).toString();
         return dirCM.getData()
                     .keySet()
                     .stream()
-                    .map(fileName -> GeneralPathImpl.create(getDefaultFileSystem(), 
-                                                            dirPathString.concat(fileName), true))
+                    .map(fileName -> GeneralPathImpl.create(dir.getFileSystem(), 
+                                                            (dirPathString.endsWith(separator) ? 
+                                                             dirPathString :
+                                                             dirPathString.concat(separator)).concat(fileName), 
+                                                            false))
                     .toArray(Path[]::new);
     }
 
@@ -224,7 +228,7 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
     protected <V extends FileAttributeView> V createFileAttributeView(final GeneralPathImpl path, 
                                                                       final Class<V> type) {
         if (AbstractBasicFileAttributeView.class.isAssignableFrom(type)) {
-            final V newView = (V) new K8SBasicFileAttributeView(path);
+            final V newView = (V) new K8SBasicFileAttributeView(path, this);
             path.addAttrView(newView);
             return newView;
         } else {
@@ -251,7 +255,7 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
         }
         
         String content = srcCM.getData().getOrDefault(CFG_MAP_FSOBJ_CONTENT_KEY, "");
-        long size = Long.parseLong(srcCM.getMetadata().getLabels().getOrDefault(CFG_MAP_LABEL_FSOBJ_SIZE_KEY, "0"));
+        long size = Long.parseLong(srcCM.getMetadata().getAnnotations().getOrDefault(CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY, "0"));
         executeCloudFunction(client -> createOrReplaceFSCM(client, 
                                                            target,
                                                            createOrReplaceParentDirFSCM(client, target, size),

@@ -31,24 +31,26 @@ import org.uberfire.java.nio.fs.file.SimpleBasicFileAttributeView;
 
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getFsObjCM;
 
-public class K8SBasicFileAttributeView extends SimpleBasicFileAttributeView implements CloudClientFactory {
+public class K8SBasicFileAttributeView extends SimpleBasicFileAttributeView {
 
     private BasicFileAttributes attrs = null;
+    private final CloudClientFactory ccf;
 
-    public K8SBasicFileAttributeView(final Path path) {
+    public K8SBasicFileAttributeView(final Path path, CloudClientFactory ccf) {
         super(path);
+        this.ccf = ccf;
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <T extends BasicFileAttributes> T readAttributes() throws IOException {
         if (attrs == null) {
-            final ConfigMap fileCM = executeCloudFunction(client -> getFsObjCM(client, path),
-                                                          KubernetesClient.class)
-                    .orElseThrow(() -> new NoSuchFileException(path.toRealPath().toString()));
+            final ConfigMap fileCM = ccf.executeCloudFunction(client -> getFsObjCM(client, path),
+                                                              KubernetesClient.class)
+                                        .orElseThrow(() -> new NoSuchFileException(path.toRealPath().toString()));
 
             this.attrs = new BasicFileAttributesImpl(path.toString(),
-                                                     new FileTimeImpl(K8SFileSystemUtils.getCreationTime(fileCM)),
+                                                     new FileTimeImpl(K8SFileSystemUtils.getLastModifiedTime(fileCM)),
                                                      new FileTimeImpl(K8SFileSystemUtils.getCreationTime(fileCM)),
                                                      null,
                                                      new LazyAttrLoader<Long>() {
