@@ -33,6 +33,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.uberfire.java.nio.file.FileAlreadyExistsException;
 import org.uberfire.java.nio.file.FileSystem;
+import org.uberfire.java.nio.file.Files;
 import org.uberfire.java.nio.file.NoSuchFileException;
 import org.uberfire.java.nio.file.Path;
 import org.uberfire.java.nio.file.spi.FileSystemProvider;
@@ -83,11 +84,10 @@ public class K8SFileSystemProviderIntegrationTest {
         final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));
         Path folderInRootFolder = fileSystem.getPath("/test");
 
-        // Folder doesn't exist yet, therefore cannot be deleted. Is there a way how to check that file exists in filesystem?
-        assertThat(fsProvider.deleteIfExists(folderInRootFolder)).isFalse();
-
-        fsProvider.createDirectory(folderInRootFolder);
-        assertThat(fsProvider.deleteIfExists(folderInRootFolder)).isTrue();
+        assertThat(Files.exists(folderInRootFolder)).isFalse();
+        assertThat(Files.deleteIfExists(folderInRootFolder)).isFalse();
+        Files.createDirectory(folderInRootFolder);
+        assertThat(Files.deleteIfExists(folderInRootFolder)).isTrue();
     }
 
     @Test
@@ -95,11 +95,11 @@ public class K8SFileSystemProviderIntegrationTest {
         final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));
         Path fileInRootFolder = fileSystem.getPath("/test.txt");
 
-        // Folder doesn't exist yet, therefore cannot be deleted. Is there a way how to check that file exists in filesystem?
-        assertThat(fsProvider.deleteIfExists(fileInRootFolder)).isFalse();
+        assertThat(Files.exists(fileInRootFolder)).isFalse();
+        assertThat(Files.deleteIfExists(fileInRootFolder)).isFalse();
 
         createOrEditFile(fileInRootFolder, "Hello");
-        assertThat(fsProvider.deleteIfExists(fileInRootFolder)).isTrue();
+        assertThat(Files.deleteIfExists(fileInRootFolder)).isTrue();
     }
 
     @Test(expected = FileAlreadyExistsException.class)
@@ -107,8 +107,8 @@ public class K8SFileSystemProviderIntegrationTest {
         final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));
         Path folderInRootFolder = fileSystem.getPath("/test");
 
-        fsProvider.createDirectory(folderInRootFolder);
-        fsProvider.createDirectory(folderInRootFolder);
+        Files.createDirectory(folderInRootFolder);
+        Files.createDirectory(folderInRootFolder);
     }
 
     @Test
@@ -133,14 +133,14 @@ public class K8SFileSystemProviderIntegrationTest {
     }
 
     private void createOrEditFile(Path file, String fileContent) throws IOException {
-        try (OutputStream fileStream = fsProvider.newOutputStream(file)) {
+        try (OutputStream fileStream = Files.newOutputStream(file)) {
             fileStream.write(fileContent.getBytes());
             fileStream.flush();
         }
     }
 
     private String readFile(Path file) throws IOException {
-        try (InputStream fileStream = fsProvider.newInputStream(file)) {
+        try (InputStream fileStream = Files.newInputStream(file)) {
             return IOUtils.toString(fileStream, StandardCharsets.UTF_8.name());
         }
     }

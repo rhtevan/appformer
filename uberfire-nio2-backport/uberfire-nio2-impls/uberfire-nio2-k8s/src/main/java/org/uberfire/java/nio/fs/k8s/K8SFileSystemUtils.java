@@ -20,28 +20,35 @@ import java.io.UnsupportedEncodingException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ConfigMapBuilder;
 import io.fabric8.kubernetes.api.model.OwnerReferenceBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.Watcher.Action;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.uberfire.java.nio.file.Path;
+import org.uberfire.java.nio.file.StandardWatchEventKind;
+import org.uberfire.java.nio.file.WatchEvent.Kind;
 import org.uberfire.java.nio.fs.cloud.CloudClientConstants;
+
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemObjectType.UNKNOWN;
+
 
 public class K8SFileSystemUtils {
 
     private static final Logger logger = LoggerFactory.getLogger(K8SFileSystemUtils.class);
-    static final String CFG_MAP_LABEL_FSOBJ_SIZE_KEY = "k8s.fs.nio.java.uberfire.org/fsobj-size";
     static final String CFG_MAP_LABEL_FSOBJ_TYPE_KEY = "k8s.fs.nio.java.uberfire.org/fsobj-type";
     static final String CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX = "k8s.fs.nio.java.uberfire.org/fsobj-name-";
+    static final String CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY = "k8s.fs.nio.java.uberfire.org/fsobj-size";
+    static final String CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY = 
+            "k8s.fs.nio.java.uberfire.org/fsobj-lastModifiedTimestamp";
     static final String CFG_MAP_FSOBJ_NAME_PREFIX = "k8s-fsobj-";
     static final String CFG_MAP_FSOBJ_CONTENT_KEY = "fsobj-content";
 
@@ -88,7 +95,11 @@ public class K8SFileSystemUtils {
                                                                          path.toRealPath().getParent().toString() +
                                                                          "]"));
         }
-        labels.put(CFG_MAP_LABEL_FSOBJ_SIZE_KEY, String.valueOf(size));
+        Map<String, String> annotations = new ConcurrentHashMap<>();
+        annotations.put(CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY, 
+                        ZonedDateTime.now().format(DateTimeFormatter.ISO_INSTANT));
+        annotations.put(CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY, String.valueOf(size));
+        
         String cmName = Optional.ofNullable(getFsObjCM(client, path))
                 .map(cm -> cm.getMetadata().getName())
                 .orElseGet(() -> CFG_MAP_FSOBJ_NAME_PREFIX + UUID.randomUUID().toString());
@@ -96,6 +107,7 @@ public class K8SFileSystemUtils {
                                              .withNewMetadata()
                                                .withName(cmName)
                                                .withLabels(labels)
+                                               .withAnnotations(annotations)
                                                .withOwnerReferences(new OwnerReferenceBuilder()
                                                  .withApiVersion(parent.getApiVersion())
                                                  .withKind(parent.getKind())
@@ -109,27 +121,38 @@ public class K8SFileSystemUtils {
                                                .withNewMetadata()
                                                  .withName(cmName)
                                                  .withLabels(labels)
+                                                 .withAnnotations(annotations)
                                                .endMetadata()
                                                .withData(content)
                                                .build()));
     }
 
     static ConfigMap getFsObjCM(KubernetesClient client, Path path) {
+        int nameCount = path.getNameCount();
         Map<String, String> labels = getFsObjNameElementLabel(path);
         if (labels.isEmpty()) {
             labels.put(CFG_MAP_LABEL_FSOBJ_TYPE_KEY, K8SFileSystemObjectType.ROOT.toString());
-        }
-        List<ConfigMap> configMaps = client.configMaps()
+        } 
+        Object[] configMaps = client.configMaps()
                                            .withLabels(labels)
                                            .list()
-                                           .getItems();
-        if (configMaps.size() > 1) {
+                                           .getItems()
+                                           .stream()
+                                           .filter(cm -> cm.getMetadata()
+                                                           .getLabels()
+                                                           .entrySet()
+                                                           .stream()
+                                                           .filter(entry -> entry.getKey().startsWith(CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX))
+                                                           .count() == nameCount)
+                                           .toArray();
+        
+        if (configMaps.length > 1) {
             throw new IllegalStateException("Ambiguous K8S FileSystem object name: [" + path.toString() +
                                             "]; should not have be associated with more than one " +
                                             "K8S FileSystem ConfigMaps.");
         }
-        if (configMaps.size() == 1) {
-            return configMaps.get(0);
+        if (configMaps.length == 1) {
+            return (ConfigMap)configMaps[0];
         }
         return null;
     }
@@ -158,33 +181,72 @@ public class K8SFileSystemUtils {
     }
 
     static long getSize(ConfigMap fileCM) {
-        return Long.parseLong(fileCM.getMetadata().getLabels().getOrDefault(CFG_MAP_LABEL_FSOBJ_SIZE_KEY, "0"));
+        return Long.parseLong(fileCM.getMetadata().getAnnotations().getOrDefault(CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY, "0"));
     }
 
     static long getCreationTime(ConfigMap fileCM) {
-        return Optional.ofNullable(ZonedDateTime.parse(fileCM.getMetadata().getCreationTimestamp(),
-                                                       DateTimeFormatter.ISO_DATE_TIME)
-                                                .toInstant()
-                                                .getEpochSecond())
-                       .orElseGet(() -> Instant.now().getEpochSecond());
+        return parseTimestamp(fileCM.getMetadata().getCreationTimestamp()).getEpochSecond();
+    }
+    
+    static long getLastModifiedTime(ConfigMap fileCM) {
+        return parseTimestamp(fileCM.getMetadata().getAnnotations()
+                                                  .get(CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY))
+                .getEpochSecond();
+    }
+    
+    static Path getPathByFsObjCM(K8SFileSystem fs, ConfigMap cm) {
+        StringBuilder pathBuilder = new StringBuilder();
+        Map<String, String> labels = cm.getMetadata().getLabels();
+        if (labels.isEmpty() || !labels.containsKey(CFG_MAP_LABEL_FSOBJ_TYPE_KEY)) {
+            throw new IllegalArgumentException("Invalid K8SFileSystem ConfigMap - Missing required labels");
+        }
+        if (labels.containsValue(K8SFileSystemObjectType.ROOT.toString())) {
+            return fs.getPath("/");
+        }
+        labels.entrySet()
+            .stream()
+            .filter(entry -> entry.getKey().startsWith(CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX))
+            .sorted(Map.Entry.comparingByKey())
+            .forEach(entry -> pathBuilder.append(fs.getSeparator()).append(entry.getValue()));
+        return fs.getPath(pathBuilder.toString());
     }
 
     static boolean isFile(ConfigMap fileCM) {
         return K8SFileSystemObjectType.FILE.toString()
                                            .equals(fileCM.getMetadata()
                                                          .getLabels()
-                                                         .getOrDefault(CFG_MAP_LABEL_FSOBJ_TYPE_KEY, "unknown"));
+                                                         .getOrDefault(CFG_MAP_LABEL_FSOBJ_TYPE_KEY, UNKNOWN.toString()));
     }
 
     static boolean isDirectory(ConfigMap fileCM) {
         return K8SFileSystemObjectType.DIR.toString()
                                           .equals(fileCM.getMetadata()
                                                         .getLabels()
-                                                        .getOrDefault(CFG_MAP_LABEL_FSOBJ_TYPE_KEY, "unknown"))
+                                                        .getOrDefault(CFG_MAP_LABEL_FSOBJ_TYPE_KEY, UNKNOWN.toString()))
                ||                           
                K8SFileSystemObjectType.ROOT.toString()
                 .equals(fileCM.getMetadata()
                               .getLabels()
-                              .getOrDefault(CFG_MAP_LABEL_FSOBJ_TYPE_KEY, "unknown"));
+                              .getOrDefault(CFG_MAP_LABEL_FSOBJ_TYPE_KEY, UNKNOWN.toString()));
+    }
+    
+    static Optional<Kind<Path>> mapActionToKind(Action action) {
+        switch(action) {
+            case ADDED:
+                return Optional.of(StandardWatchEventKind.ENTRY_CREATE);
+            case DELETED:
+                return Optional.of(StandardWatchEventKind.ENTRY_DELETE);
+            case MODIFIED:
+                return Optional.of(StandardWatchEventKind.ENTRY_MODIFY);
+            case ERROR:
+            default:
+                return Optional.empty();
+        }
+    }
+
+    static Instant parseTimestamp(String timestamp) {
+        return Optional.ofNullable(timestamp).map(ts -> ZonedDateTime.parse(ts, DateTimeFormatter.ISO_DATE_TIME)
+                                                                     .toInstant())
+                                             .orElse(Instant.now());
     }
 }

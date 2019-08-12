@@ -20,7 +20,8 @@ enum K8SFileSystemObjectType {
     STORE("fsobj-filestore"),
     ROOT("fsobj-root-directory"),
     DIR("fsobj-directory"),
-    FILE("fsobj-regular-file");
+    FILE("fsobj-regular-file"),
+    UNKNOWN("fsobj-unknown");
 
     private final String desc;
 

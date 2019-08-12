@@ -19,12 +19,13 @@ metadata:
   name: k8s-fsobj-e6bb5ba5-527f-11e9-8a93-8c16458eff36
   labels:
     k8s.fs.nio.java.uberfire.org/fsobj-name-0: testDir
-    k8s.fs.nio.java.uberfire.org/fsobj-size: 19
     k8s.fs.nio.java.uberfire.org/fsobj-type: fsobj-directory
+  annotations:
+    k8s.fs.nio.java.uberfire.org/fsobj-size: 19
   creationTimestamp: 1970-01-01T00:00:00Z  
+  uid: e6bb5ba5-527f-11e9-8a93-8c16458eff36
 data:
   testFile: 19
-uid: e6bb5ba5-527f-11e9-8a93-8c16458eff36
 ownerReferences:
 - apiVersion: apps.openshift.io/v1
   kind: ConfigMap
