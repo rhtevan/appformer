@@ -46,7 +46,13 @@ public class K8SWatchKey implements WatchKey {
 
     @Override
     public boolean reset() {
-        return state.compareAndSet(State.SIGNALLED, State.READY);
+        if (isValid()) {
+            events.clear();
+            eventKinds.clear();
+            return state.compareAndSet(State.SIGNALLED, State.READY);
+        } else {
+            return false;
+        }
     }
 
     @Override

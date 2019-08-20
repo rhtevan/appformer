@@ -21,12 +21,18 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.DefaultKubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import org.apache.commons.io.IOUtils;
+import org.awaitility.Awaitility;
+import org.awaitility.Duration;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -36,7 +42,12 @@ import org.uberfire.java.nio.file.FileSystem;
 import org.uberfire.java.nio.file.Files;
 import org.uberfire.java.nio.file.NoSuchFileException;
 import org.uberfire.java.nio.file.Path;
+import org.uberfire.java.nio.file.StandardWatchEventKind;
+import org.uberfire.java.nio.file.WatchEvent;
+import org.uberfire.java.nio.file.WatchKey;
+import org.uberfire.java.nio.file.WatchService;
 import org.uberfire.java.nio.file.spi.FileSystemProvider;
+import org.uberfire.java.nio.fs.k8s.K8SFileSystem;
 import org.uberfire.java.nio.fs.k8s.K8SFileSystemProvider;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
@@ -132,6 +143,308 @@ public class K8SFileSystemProviderIntegrationTest {
         readFile(fileInRootFolder);
     }
 
+    @Test
+    public void testWatchCreateDirectory() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path root = kfs.getPath("/");
+        final Path watchDir = kfs.getPath("/watchDir");
+
+        try (WatchService watcher = kfs.newWatchService()){
+            watchDir.register(watcher);
+
+            // Check directory creation events, root is created first
+            Files.createDirectory(watchDir);
+            WatchKey createRootKey = watcher.poll();
+            assertThat(createRootKey.isValid()).isTrue();
+            assertThat(createRootKey.watchable()).isEqualTo(root);
+
+            List<WatchEvent<?>> rootEvents = new ArrayList<>();
+            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createRootKey, rootEvents, 1));
+            assertThat(rootEvents).asList().hasSize(1);
+
+            WatchEvent<?> firstEvent = rootEvents.get(0);
+            assertThat(firstEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
+            assertThat(firstEvent.count()).isEqualTo(1);
+            assertThat(firstEvent.context()).isNull();
+
+            // Watched directory is created then
+            WatchKey createWatchDirKey = watcher.poll();
+            assertThat(createWatchDirKey.isValid()).isTrue();
+            assertThat(createWatchDirKey.watchable()).isEqualTo(watchDir);
+
+            List<WatchEvent<?>> watchDirEvents = new ArrayList<>();
+            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createWatchDirKey, watchDirEvents, 1));
+            assertThat(watchDirEvents).asList().hasSize(1);
+
+            WatchEvent<?> firstWatchDirEvent = watchDirEvents.get(0);
+            assertThat(firstWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
+            assertThat(firstWatchDirEvent.count()).isEqualTo(1);
+            assertThat(firstWatchDirEvent.context()).isEqualTo(root);
+
+            // No more events
+            assertThat(watcher.poll()).isNull();
+        }
+    }
+
+    @Test
+    public void testWatchCreateFile() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path root = kfs.getPath("/");
+        final Path fileInRootFolder = kfs.getPath("/test.txt");
+
+        try (WatchService watcher = kfs.newWatchService()){
+            fileInRootFolder.register(watcher);
+
+            // Check file creation events, root is created first
+            createOrEditFile(fileInRootFolder, "Hi");
+            WatchKey createRootKey = watcher.poll();
+            assertThat(createRootKey.isValid()).isTrue();
+            assertThat(createRootKey.watchable()).isEqualTo(root);
+
+            List<WatchEvent<?>> rootEvents = new ArrayList<>();
+            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createRootKey, rootEvents, 1));
+            assertThat(rootEvents).asList().hasSize(1);
+
+            WatchEvent<?> firstEvent = rootEvents.get(0);
+            assertThat(firstEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
+            assertThat(firstEvent.count()).isEqualTo(1);
+            assertThat(firstEvent.context()).isNull();
+
+            // Watched file is created then
+            WatchKey createWatchDirKey = watcher.poll();
+            assertThat(createWatchDirKey.isValid()).isTrue();
+            assertThat(createWatchDirKey.watchable()).isEqualTo(fileInRootFolder);
+
+            List<WatchEvent<?>> watchDirEvents = new ArrayList<>();
+            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createWatchDirKey, watchDirEvents, 1));
+            assertThat(watchDirEvents).asList().hasSize(1);
+
+            WatchEvent<?> firstWatchDirEvent = watchDirEvents.get(0);
+            assertThat(firstWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
+            assertThat(firstWatchDirEvent.count()).isEqualTo(1);
+            assertThat(firstWatchDirEvent.context()).isEqualTo(root);
+
+            // No more events
+            assertThat(watcher.poll()).isNull();
+        }
+    }
+
+    @Test
+    public void testWatchEditFile() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path root = kfs.getPath("/");
+        final Path fileInRootFolder = kfs.getPath("/test.txt");
+
+        try (WatchService watcher = kfs.newWatchService()){
+            fileInRootFolder.register(watcher);
+
+            // Check file creation events, root is created first, also it is modified as folder tracks size of its content
+            createOrEditFile(fileInRootFolder, "Hi");
+            createOrEditFile(fileInRootFolder, "Welcome");
+            createOrEditFile(fileInRootFolder, "Hello");
+            WatchKey createRootKey = watcher.poll();
+            assertThat(createRootKey.isValid()).isTrue();
+            assertThat(createRootKey.watchable()).isEqualTo(root);
+
+            List<WatchEvent<?>> rootEvents = new ArrayList<>();
+            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createRootKey, rootEvents, 2));
+            assertThat(rootEvents).asList().hasSize(2);
+
+            WatchEvent<?> firstEvent = rootEvents.get(0);
+            assertThat(firstEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
+            assertThat(firstEvent.count()).isEqualTo(1);
+            assertThat(firstEvent.context()).isNull();
+
+            WatchEvent<?> secondEvent = rootEvents.get(1);
+            assertThat(secondEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_MODIFY);
+            assertThat(secondEvent.count()).isEqualTo(2);
+            assertThat(secondEvent.context()).isNull();
+
+            // Watched file is created and modified then
+            WatchKey createWatchDirKey = watcher.poll();
+            assertThat(createWatchDirKey.isValid()).isTrue();
+            assertThat(createWatchDirKey.watchable()).isEqualTo(fileInRootFolder);
+
+            List<WatchEvent<?>> watchDirEvents = new ArrayList<>();
+            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createWatchDirKey, watchDirEvents, 2));
+            assertThat(watchDirEvents).asList().hasSize(2);
+
+            WatchEvent<?> firstWatchDirEvent = watchDirEvents.get(0);
+            assertThat(firstWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
+            assertThat(firstWatchDirEvent.count()).isEqualTo(1);
+            assertThat(firstWatchDirEvent.context()).isEqualTo(root);
+
+            WatchEvent<?> secondWatchDirEvent = watchDirEvents.get(1);
+            assertThat(secondWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_MODIFY);
+            assertThat(secondWatchDirEvent.count()).isEqualTo(2);
+            assertThat(secondWatchDirEvent.context()).isEqualTo(root);
+
+            // No more events
+            assertThat(watcher.poll()).isNull();
+        }
+    }
+
+    @Test
+    public void testWatchDeleteFile() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path root = kfs.getPath("/");
+        final Path fileInRootFolder = kfs.getPath("/test.txt");
+
+        try (WatchService watcher = kfs.newWatchService()){
+            fileInRootFolder.register(watcher);
+
+            // Check file creation events, root is created first, also it is modified as folder tracks size of its content
+            createOrEditFile(fileInRootFolder, "Hi");
+            assertThat(Files.deleteIfExists(fileInRootFolder)).isTrue();
+
+            WatchKey createRootKey = watcher.poll();
+            assertThat(createRootKey.isValid()).isTrue();
+            assertThat(createRootKey.watchable()).isEqualTo(root);
+
+            List<WatchEvent<?>> rootEvents = new ArrayList<>();
+            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createRootKey, rootEvents, 1));
+            assertThat(rootEvents).asList().hasSize(1);
+
+            WatchEvent<?> firstEvent = rootEvents.get(0);
+            assertThat(firstEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
+            assertThat(firstEvent.count()).isEqualTo(1);
+            assertThat(firstEvent.context()).isNull();
+
+            // Watched file is created and deleted then
+            WatchKey createWatchDirKey = watcher.poll();
+            assertThat(createWatchDirKey.isValid()).isTrue();
+            assertThat(createWatchDirKey.watchable()).isEqualTo(fileInRootFolder);
+
+            List<WatchEvent<?>> watchDirEvents = new ArrayList<>();
+            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createWatchDirKey, watchDirEvents, 3));
+            assertThat(watchDirEvents).asList().hasSize(3);
+
+            WatchEvent<?> firstWatchDirEvent = watchDirEvents.get(0);
+            assertThat(firstWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
+            assertThat(firstWatchDirEvent.count()).isEqualTo(1);
+            assertThat(firstWatchDirEvent.context()).isEqualTo(root);
+
+            WatchEvent<?> secondWatchDirEvent = watchDirEvents.get(1);
+            assertThat(secondWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_MODIFY);
+            assertThat(secondWatchDirEvent.count()).isEqualTo(1);
+            assertThat(secondWatchDirEvent.context()).isEqualTo(root);
+
+            WatchEvent<?> thirdWatchDirEvent = watchDirEvents.get(2);
+            assertThat(thirdWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_DELETE);
+            assertThat(thirdWatchDirEvent.count()).isEqualTo(1);
+            assertThat(thirdWatchDirEvent.context()).isEqualTo(root);
+
+            // No more events
+            assertThat(watcher.poll()).isNull();
+        }
+    }
+
+    @Test
+    public void testCancelWatchKey() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path root = kfs.getPath("/");
+        final Path watchDir = kfs.getPath("/watchDir");
+
+        try (WatchService watcher = kfs.newWatchService()){
+            watchDir.register(watcher);
+
+            Files.createDirectory(watchDir);
+            WatchKey createRootKey = watcher.poll();
+            assertThat(createRootKey.isValid()).isTrue();
+            assertThat(createRootKey.watchable()).isEqualTo(root);
+
+            createRootKey.cancel();
+
+            assertThat(createRootKey.isValid()).isFalse();
+        }
+    }
+
+    @Test
+    public void testResetWatchKey() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path root = kfs.getPath("/");
+        final Path watchDir = kfs.getPath("/watchDir");
+
+        try (WatchService watcher = kfs.newWatchService()){
+            watchDir.register(watcher);
+
+            Files.createDirectory(watchDir);
+            WatchKey createRootKey = watcher.poll();
+            assertThat(createRootKey.isValid()).isTrue();
+            assertThat(createRootKey.watchable()).isEqualTo(root);
+
+            // Reset the key
+            assertThat(createRootKey.reset()).isTrue();
+
+            // The creation event has been removed from poll events
+            assertThat(createRootKey.pollEvents()).asList().isEmpty();
+        }
+    }
+
+    @Test
+    public void testResetCancelledWatchKey() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path root = kfs.getPath("/");
+        final Path watchDir = kfs.getPath("/watchDir");
+
+        try (WatchService watcher = kfs.newWatchService()){
+            watchDir.register(watcher);
+
+            Files.createDirectory(watchDir);
+            WatchKey createRootKey = watcher.poll();
+            assertThat(createRootKey.isValid()).isTrue();
+            assertThat(createRootKey.watchable()).isEqualTo(root);
+
+            createRootKey.cancel();
+            assertThat(createRootKey.reset()).isFalse();
+        }
+    }
+
+    @Test
+    public void testPollWatchKeyWithTimeout() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path root = kfs.getPath("/");
+        final Path watchDir = kfs.getPath("/watchDir");
+
+        try (WatchService watcher = kfs.newWatchService()){
+            watchDir.register(watcher);
+
+            Files.createDirectory(watchDir);
+            WatchKey createRootKey = watcher.poll(1, TimeUnit.MILLISECONDS);
+            assertThat(createRootKey.isValid()).isTrue();
+            assertThat(createRootKey.watchable()).isEqualTo(root);
+        }
+    }
+
+    @Test(timeout = 30_000L)
+    public void testTakeWatchKey() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path root = kfs.getPath("/");
+        final Path watchDir = kfs.getPath("/watchDir");
+
+        try (WatchService watcher = kfs.newWatchService()){
+            watchDir.register(watcher);
+
+            Runnable createDirectory = () -> Files.createDirectory(watchDir);
+            Thread createDirectoryThread = new Thread(createDirectory);
+            createDirectoryThread.start();
+
+            WatchKey createRootKey = watcher.take();
+            assertThat(createRootKey.isValid()).isTrue();
+            assertThat(createRootKey.watchable()).isEqualTo(root);
+        }
+    }
+
+    @Test
+    public void testCloseAlreadyClosedWatchService() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        WatchService watcher = kfs.newWatchService();
+        watcher.close();
+        assertThat(watcher.isClose()).isTrue();
+        watcher.close();
+        assertThat(watcher.isClose()).isTrue();
+    }
+
     private void createOrEditFile(Path file, String fileContent) throws IOException {
         try (OutputStream fileStream = Files.newOutputStream(file)) {
             fileStream.write(fileContent.getBytes());
@@ -143,5 +456,18 @@ public class K8SFileSystemProviderIntegrationTest {
         try (InputStream fileStream = Files.newInputStream(file)) {
             return IOUtils.toString(fileStream, StandardCharsets.UTF_8.name());
         }
+    }
+
+    private Callable<Boolean> fetchWatchEvents(WatchKey watchKey, List<WatchEvent<?>> foundEvents, int numberOfEventsExpected) {
+        return new Callable<Boolean>() {
+            public Boolean call() {
+                foundEvents.addAll(watchKey.pollEvents());
+
+                if (foundEvents.size() >= numberOfEventsExpected) {
+                    return Boolean.TRUE;
+                }
+                return Boolean.FALSE;
+            }
+        };
     }
 }

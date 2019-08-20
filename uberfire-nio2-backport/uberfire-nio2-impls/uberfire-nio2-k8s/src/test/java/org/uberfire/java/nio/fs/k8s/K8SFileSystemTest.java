@@ -375,7 +375,6 @@ public class K8SFileSystemTest {
                     foundNewDir = true;
                 }
             }
-        } catch (Exception e) {
         }
         assertThat(foundNewDir).isTrue();
 
@@ -383,8 +382,6 @@ public class K8SFileSystemTest {
             ArrayList<Path> dirContent = Lists.newArrayList(stream);
             assertThat(dirContent.size()).isEqualTo(1);
             assertThat(dirContent.get(0)).isEqualTo(testFile);
-        } catch (Exception e) {
         }
     }
-    
 }
