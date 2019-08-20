@@ -67,7 +67,7 @@ public class K8SWatchKey implements WatchKey {
 
     protected boolean postEvent(WatchEvent.Kind<Path> kind) {
         Event event = eventKinds.computeIfAbsent(kind, k -> {
-            Event e = new Event(kind, K8SWatchKey.this.path.getParent());
+            Event e = new Event(kind, K8SWatchKey.this.path.getFileName());
             return events.offer(e) ? e : null;
         });
         if (event == null) {
