@@ -179,7 +179,7 @@ public class K8SFileSystemProviderIntegrationTest {
             WatchEvent<?> firstWatchDirEvent = watchDirEvents.get(0);
             assertThat(firstWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
             assertThat(firstWatchDirEvent.count()).isEqualTo(1);
-            assertThat(firstWatchDirEvent.context()).isEqualTo(root);
+            assertThat(firstWatchDirEvent.context()).isEqualTo(watchDir.getFileName());
 
             // No more events
             assertThat(watcher.poll()).isNull();
@@ -222,7 +222,7 @@ public class K8SFileSystemProviderIntegrationTest {
             WatchEvent<?> firstWatchDirEvent = watchDirEvents.get(0);
             assertThat(firstWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
             assertThat(firstWatchDirEvent.count()).isEqualTo(1);
-            assertThat(firstWatchDirEvent.context()).isEqualTo(root);
+            assertThat(firstWatchDirEvent.context()).isEqualTo(fileInRootFolder.getFileName());
 
             // No more events
             assertThat(watcher.poll()).isNull();
@@ -272,12 +272,12 @@ public class K8SFileSystemProviderIntegrationTest {
             WatchEvent<?> firstWatchDirEvent = watchDirEvents.get(0);
             assertThat(firstWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
             assertThat(firstWatchDirEvent.count()).isEqualTo(1);
-            assertThat(firstWatchDirEvent.context()).isEqualTo(root);
+            assertThat(firstWatchDirEvent.context()).isEqualTo(fileInRootFolder.getFileName());
 
             WatchEvent<?> secondWatchDirEvent = watchDirEvents.get(1);
             assertThat(secondWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_MODIFY);
             assertThat(secondWatchDirEvent.count()).isEqualTo(2);
-            assertThat(secondWatchDirEvent.context()).isEqualTo(root);
+            assertThat(secondWatchDirEvent.context()).isEqualTo(fileInRootFolder.getFileName());
 
             // No more events
             assertThat(watcher.poll()).isNull();
@@ -322,17 +322,17 @@ public class K8SFileSystemProviderIntegrationTest {
             WatchEvent<?> firstWatchDirEvent = watchDirEvents.get(0);
             assertThat(firstWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
             assertThat(firstWatchDirEvent.count()).isEqualTo(1);
-            assertThat(firstWatchDirEvent.context()).isEqualTo(root);
+            assertThat(firstWatchDirEvent.context()).isEqualTo(fileInRootFolder.getFileName());
 
             WatchEvent<?> secondWatchDirEvent = watchDirEvents.get(1);
             assertThat(secondWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_MODIFY);
             assertThat(secondWatchDirEvent.count()).isEqualTo(1);
-            assertThat(secondWatchDirEvent.context()).isEqualTo(root);
+            assertThat(secondWatchDirEvent.context()).isEqualTo(fileInRootFolder.getFileName());
 
             WatchEvent<?> thirdWatchDirEvent = watchDirEvents.get(2);
             assertThat(thirdWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_DELETE);
             assertThat(thirdWatchDirEvent.count()).isEqualTo(1);
-            assertThat(thirdWatchDirEvent.context()).isEqualTo(root);
+            assertThat(thirdWatchDirEvent.context()).isEqualTo(fileInRootFolder.getFileName());
 
             // No more events
             assertThat(watcher.poll()).isNull();
