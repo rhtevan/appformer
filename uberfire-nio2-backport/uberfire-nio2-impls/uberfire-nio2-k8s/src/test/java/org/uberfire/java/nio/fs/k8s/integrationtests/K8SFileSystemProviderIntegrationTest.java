@@ -154,7 +154,7 @@ public class K8SFileSystemProviderIntegrationTest {
 
             // Check directory creation events, root is created first
             Files.createDirectory(watchDir);
-            WatchKey createRootKey = watcher.poll();
+            WatchKey createRootKey = watcher.poll(30, TimeUnit.SECONDS);
             assertThat(createRootKey.isValid()).isTrue();
             assertThat(createRootKey.watchable()).isEqualTo(root);
 
@@ -197,7 +197,7 @@ public class K8SFileSystemProviderIntegrationTest {
 
             // Check file creation events, root is created first
             createOrEditFile(fileInRootFolder, "Hi");
-            WatchKey createRootKey = watcher.poll();
+            WatchKey createRootKey = watcher.poll(30, TimeUnit.SECONDS);
             assertThat(createRootKey.isValid()).isTrue();
             assertThat(createRootKey.watchable()).isEqualTo(root);
 
@@ -242,7 +242,7 @@ public class K8SFileSystemProviderIntegrationTest {
             createOrEditFile(fileInRootFolder, "Hi");
             createOrEditFile(fileInRootFolder, "Welcome");
             createOrEditFile(fileInRootFolder, "Hello");
-            WatchKey createRootKey = watcher.poll();
+            WatchKey createRootKey = watcher.poll(30, TimeUnit.SECONDS);
             assertThat(createRootKey.isValid()).isTrue();
             assertThat(createRootKey.watchable()).isEqualTo(root);
 
@@ -297,7 +297,7 @@ public class K8SFileSystemProviderIntegrationTest {
             createOrEditFile(fileInRootFolder, "Hi");
             assertThat(Files.deleteIfExists(fileInRootFolder)).isTrue();
 
-            WatchKey createRootKey = watcher.poll();
+            WatchKey createRootKey = watcher.poll(30, TimeUnit.SECONDS);
             assertThat(createRootKey.isValid()).isTrue();
             assertThat(createRootKey.watchable()).isEqualTo(root);
 
@@ -349,7 +349,7 @@ public class K8SFileSystemProviderIntegrationTest {
             watchDir.register(watcher);
 
             Files.createDirectory(watchDir);
-            WatchKey createRootKey = watcher.poll();
+            WatchKey createRootKey = watcher.poll(30, TimeUnit.SECONDS);
             assertThat(createRootKey.isValid()).isTrue();
             assertThat(createRootKey.watchable()).isEqualTo(root);
 
@@ -369,7 +369,7 @@ public class K8SFileSystemProviderIntegrationTest {
             watchDir.register(watcher);
 
             Files.createDirectory(watchDir);
-            WatchKey createRootKey = watcher.poll();
+            WatchKey createRootKey = watcher.poll(30, TimeUnit.SECONDS);
             assertThat(createRootKey.isValid()).isTrue();
             assertThat(createRootKey.watchable()).isEqualTo(root);
 
@@ -391,7 +391,7 @@ public class K8SFileSystemProviderIntegrationTest {
             watchDir.register(watcher);
 
             Files.createDirectory(watchDir);
-            WatchKey createRootKey = watcher.poll();
+            WatchKey createRootKey = watcher.poll(30, TimeUnit.SECONDS);
             assertThat(createRootKey.isValid()).isTrue();
             assertThat(createRootKey.watchable()).isEqualTo(root);
 

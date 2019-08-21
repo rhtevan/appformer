@@ -79,6 +79,7 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
                                       final OpenOption... options) throws IllegalArgumentException, 
         NoSuchFileException, IOException, SecurityException {
         checkNotNull("path", path);
+        checkFileNotExistThenThrow(path, false);
         return Channels.newInputStream(new K8SFileChannel(path, this));
     }
 

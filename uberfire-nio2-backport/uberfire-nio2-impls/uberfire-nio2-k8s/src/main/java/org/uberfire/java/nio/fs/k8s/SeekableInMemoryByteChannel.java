@@ -100,19 +100,25 @@ public class SeekableInMemoryByteChannel implements SeekableByteChannel {
         if (source == null) {
             throw new IllegalArgumentException("Source buffer must be supplied");
         }
-
+        
         final int totalBytes = source.remaining();
         if (totalBytes > capacity || this.position + totalBytes > capacity) {
             throw new IOException("Reached maximum capacity of [" + capacity + "] bytes.");
         }
         
         final byte[] readContents = new byte[totalBytes];
-        source.get(readContents);
+        source.get(readContents, source.position(), readContents.length);
 
         synchronized (this) {
             this.contents = this.concat(this.contents, readContents, this.position);
             this.position += totalBytes;
+            /**
+             * Channel content will be overwritten by new source completely 
+             * from existing position. Old trailing content will be cleared.
+             */
+            truncate(this.position()); 
         }
+
         return totalBytes;
     }
 

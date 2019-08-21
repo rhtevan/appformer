@@ -151,10 +151,10 @@ public class SeekableInMemoryByteChannelTestCase {
         this.channel.write(smallerBuffer);
         final int newPosition = 2;
         final int numBytesWritten = this.channel.position(newPosition).write(ByteBuffer.wrap("DR".getBytes(UTF8)));
-        // Read 3 bytes from the new position
-        final byte[] contents = new byte[3];
+        // Read 2 bytes from the new position
+        final byte[] contents = new byte[2];
         this.channel.position(newPosition).read(ByteBuffer.wrap(contents));
-        final String expected = "DRl";
+        final String expected = "DR";
         final String read = new String(contents, UTF8);
         Assert.assertEquals("Write should report correct number of bytes written", 2, numBytesWritten);
         Assert.assertEquals("Channel should respect explicit position during writes", expected, read);

@@ -16,6 +16,7 @@
 
 package org.uberfire.java.nio.fs.k8s;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -32,6 +33,7 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.uberfire.java.nio.IOException;
 import org.uberfire.java.nio.file.DirectoryStream;
 import org.uberfire.java.nio.file.FileSystem;
 import org.uberfire.java.nio.file.Files;
@@ -383,5 +385,50 @@ public class K8SFileSystemTest {
             assertThat(dirContent.size()).isEqualTo(1);
             assertThat(dirContent.get(0)).isEqualTo(testFile);
         }
+    }
+    
+    @Test
+    public void testOverwriteFile() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final Path testFile = kfs.getPath("/testOverWrite.txt");
+        final String content = "Large content, blah, blah, blah...";
+        final String smallerContent = "Small";
+        
+        newFileWithContent(testFile, content);
+        assertThat(Files.exists(testFile)).isTrue();
+
+        try (BufferedWriter writer = Files.newBufferedWriter(testFile, Charset.forName("UTF-8"))) {
+            writer.write(smallerContent, 0, smallerContent.length());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        StringBuffer sb = new StringBuffer();
+        try (BufferedReader reader = Files.newBufferedReader(testFile, Charset.forName("UTF-8"))) {
+            String line = null;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+            }
+        } catch (Exception x) {
+        }
+        
+        assertThat(sb.toString()).isEqualTo(smallerContent);
+        
+        try (BufferedWriter writer = Files.newBufferedWriter(testFile, Charset.forName("UTF-8"))) {
+            writer.write(content, 0, content.length());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        sb = new StringBuffer();
+        try (BufferedReader reader = Files.newBufferedReader(testFile, Charset.forName("UTF-8"))) {
+            String line = null;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+            }
+        } catch (Exception x) {
+        }
+        
+        assertThat(sb.toString()).isEqualTo(content);
     }
 }
