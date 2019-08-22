@@ -54,8 +54,6 @@ import org.uberfire.java.nio.fs.file.SimpleFileSystemProvider;
 
 import static org.kie.soup.commons.validation.PortablePreconditions.checkCondition;
 import static org.kie.soup.commons.validation.PortablePreconditions.checkNotNull;
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY;
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_FSOBJ_CONTENT_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceParentDirFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.deleteAndUpdateParentCM;
@@ -254,12 +252,12 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
             throw new UnsupportedOperationException(srcCMOpt.get().getMetadata().getName() + "is a directory.");
         }
         
-        String content = srcCM.getData().getOrDefault(CFG_MAP_FSOBJ_CONTENT_KEY, "");
-        long size = Long.parseLong(srcCM.getMetadata().getAnnotations().getOrDefault(CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY, "0"));
+        String content = srcCM.getData().getOrDefault(K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY, "");
+        long size = Long.parseLong(srcCM.getMetadata().getAnnotations().getOrDefault(K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY, "0"));
         executeCloudFunction(client -> createOrReplaceFSCM(client, 
                                                            target,
                                                            createOrReplaceParentDirFSCM(client, target, size),
-                                                           Collections.singletonMap(CFG_MAP_FSOBJ_CONTENT_KEY, content),
+                                                           Collections.singletonMap(K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY, content),
                                                            false), 
                              KubernetesClient.class);
     }

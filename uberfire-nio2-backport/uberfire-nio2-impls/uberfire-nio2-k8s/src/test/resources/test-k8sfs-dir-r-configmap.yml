@@ -19,6 +19,7 @@ metadata:
   name: k8s-fsobj-e6bb5ba5-527f-11e9-8a93-8c16458eff35
   labels:
     k8s.fs.nio.java.uberfire.org/fsobj-type: fsobj-root-directory
+    k8s.fs.nio.java.uberfire.org/fsobj-app: unknown
   annotations:
     k8s.fs.nio.java.uberfire.org/fsobj-size: 19
     k8s.fs.nio.java.uberfire.org/fsobj-test: must-have 

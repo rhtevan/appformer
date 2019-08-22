@@ -21,6 +21,7 @@ import java.io.BufferedWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
@@ -41,10 +42,6 @@ import org.uberfire.java.nio.file.spi.FileSystemProvider;
 import org.uberfire.java.nio.fs.cloud.CloudClientConstants;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY;
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY;
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_FSOBJ_CONTENT_KEY;
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_LABEL_FSOBJ_TYPE_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceParentDirFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getCreationTime;
@@ -77,7 +74,7 @@ public class K8SFileSystemTest {
 
     protected String newFileWithContent(final Path newFile, final String testFileContent) {
         Files.createFile(newFile);
-        try (BufferedWriter writer = Files.newBufferedWriter(newFile, Charset.forName("UTF-8"))) {
+        try (BufferedWriter writer = Files.newBufferedWriter(newFile, StandardCharsets.UTF_8)) {
             writer.write(testFileContent, 0, testFileContent.length());
         } catch (Exception e) {
             e.printStackTrace();
@@ -105,6 +102,12 @@ public class K8SFileSystemTest {
                       .inNamespace(TEST_NAMESPACE)
                       .createOrReplace(CLIENT_FACTORY.get().configMaps()
                                                      .load(K8SFileSystemTest.class.getResourceAsStream("/test-k8sfs-file-configmap.yml"))
+                                                     .get());
+        CLIENT_FACTORY.get()
+                      .configMaps()
+                      .inNamespace(TEST_NAMESPACE)
+                      .createOrReplace(CLIENT_FACTORY.get().configMaps()
+                                                     .load(K8SFileSystemTest.class.getResourceAsStream("/test-k8sfs-dir-00-configmap.yml"))
                                                      .get());
     }
 
@@ -170,9 +173,9 @@ public class K8SFileSystemTest {
         assertThat(myDirCM).isNotNull();
         assertThat(myDirCM.getMetadata().getLabels().get("k8s.fs.nio.java.uberfire.org/fsobj-name-0"))
                                                     .isEqualTo("myDir");
-        assertThat(myDirCM.getMetadata().getLabels().get(CFG_MAP_LABEL_FSOBJ_TYPE_KEY))
+        assertThat(myDirCM.getMetadata().getLabels().get(K8SFileSystemConstants.CFG_MAP_LABEL_FSOBJ_TYPE_KEY))
                                                     .isEqualTo(K8SFileSystemObjectType.DIR.toString());
-        assertThat(myDirCM.getMetadata().getAnnotations().get(CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY))
+        assertThat(myDirCM.getMetadata().getAnnotations().get(K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY))
                                                     .isEqualTo("0");
         assertThat(myDirCM.getData().isEmpty()).isTrue();
         
@@ -191,11 +194,11 @@ public class K8SFileSystemTest {
         
         assertThat(newDirCM).isNotNull();
         assertThat(newFileCM).isNotNull();
-        assertThat(newDirCM.getMetadata().getAnnotations().get(CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY))
+        assertThat(newDirCM.getMetadata().getAnnotations().get(K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY))
             .isNotNull();
-        assertThat(newFileCM.getMetadata().getAnnotations().get(CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY))
+        assertThat(newFileCM.getMetadata().getAnnotations().get(K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY))
             .isNotNull();
-        assertThat(newFileCM.getData().get(CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
+        assertThat(newFileCM.getData().get(K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
         assertThat(Files.size(newFile)).isEqualTo(testFileContent.length());
     }
 
@@ -340,7 +343,7 @@ public class K8SFileSystemTest {
         
         assertThat(Files.exists(target)).isTrue();
         assertThat(getFsObjCM(CLIENT_FACTORY.get(), target).getData()
-                   .get(CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
+                   .get(K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
     }
 
     @Test
@@ -357,7 +360,7 @@ public class K8SFileSystemTest {
         assertThat(Files.notExists(src)).isTrue();
         assertThat(Files.exists(target)).isTrue();
         assertThat(getFsObjCM(CLIENT_FACTORY.get(), target).getData()
-                   .get(CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
+                   .get(K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
     }
     
     @Test

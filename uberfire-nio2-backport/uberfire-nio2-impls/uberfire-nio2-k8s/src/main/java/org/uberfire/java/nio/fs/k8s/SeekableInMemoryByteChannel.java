@@ -20,15 +20,15 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
-import com.google.common.base.Charsets;
 import com.google.common.io.ByteSource;
 import org.uberfire.java.nio.IOException;
 import org.uberfire.java.nio.channels.SeekableByteChannel;
 
 public class SeekableInMemoryByteChannel implements SeekableByteChannel {
 
-    private static final String ENCODING = System.getProperty("file.encoding", Charsets.UTF_8.name());
+    private static final String ENCODING = System.getProperty("file.encoding", StandardCharsets.UTF_8.name());
 
     private int position;
     private int capacity = Integer.MAX_VALUE;

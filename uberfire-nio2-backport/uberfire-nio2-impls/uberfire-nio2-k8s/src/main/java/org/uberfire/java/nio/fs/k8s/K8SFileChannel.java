@@ -23,14 +23,12 @@ import org.uberfire.java.nio.IOException;
 import org.uberfire.java.nio.file.Path;
 import org.uberfire.java.nio.fs.cloud.CloudClientFactory;
 
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_FSOBJ_CONTENT_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceParentDirFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getFsObjCM;
 
 public class K8SFileChannel extends SeekableInMemoryByteChannel {
-    private static final String K8S_FS_MAX_CAPACITY_PROPERTY_NAME = "org.uberfire.java.nio.fs.k8s.max.file.size";
-    private static final int CAPACITY = Integer.parseInt(System.getProperty(K8S_FS_MAX_CAPACITY_PROPERTY_NAME, 
+    private static final int CAPACITY = Integer.parseInt(System.getProperty(K8SFileSystemConstants.K8S_FS_MAX_CAPACITY_PROPERTY_NAME, 
                                                                             String.valueOf(100 * 1024)));  
     private final CloudClientFactory ccf;
     private final Path file;
@@ -52,7 +50,7 @@ public class K8SFileChannel extends SeekableInMemoryByteChannel {
         ccf.executeCloudFunction(client -> createOrReplaceFSCM(client, 
                                                                file,
                                                                createOrReplaceParentDirFSCM(client, file, size()),
-                                                               Collections.singletonMap(CFG_MAP_FSOBJ_CONTENT_KEY, 
+                                                               Collections.singletonMap(K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY, 
                                                                                         super.toString()),
                                                                false), 
                                  KubernetesClient.class);

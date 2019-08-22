@@ -38,20 +38,23 @@ import org.uberfire.java.nio.file.StandardWatchEventKind;
 import org.uberfire.java.nio.file.WatchEvent.Kind;
 import org.uberfire.java.nio.fs.cloud.CloudClientConstants;
 
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_FSOBJ_NAME_PREFIX;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_LABEL_FSOBJ_APP_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_LABEL_FSOBJ_TYPE_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_APP_DEFAULT_VALUE;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_APP_PROPERTY_NAME;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemObjectType.UNKNOWN;
 
 
 public class K8SFileSystemUtils {
 
-    private static final Logger logger = LoggerFactory.getLogger(K8SFileSystemUtils.class);
-    static final String CFG_MAP_LABEL_FSOBJ_TYPE_KEY = "k8s.fs.nio.java.uberfire.org/fsobj-type";
-    static final String CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX = "k8s.fs.nio.java.uberfire.org/fsobj-name-";
-    static final String CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY = "k8s.fs.nio.java.uberfire.org/fsobj-size";
-    static final String CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY = 
-            "k8s.fs.nio.java.uberfire.org/fsobj-lastModifiedTimestamp";
-    static final String CFG_MAP_FSOBJ_NAME_PREFIX = "k8s-fsobj-";
-    static final String CFG_MAP_FSOBJ_CONTENT_KEY = "fsobj-content";
+    public static final String APP_NAME = System.getProperty(K8S_FS_APP_PROPERTY_NAME, K8S_FS_APP_DEFAULT_VALUE);
 
+    private static final Logger logger = LoggerFactory.getLogger(K8SFileSystemUtils.class);
     private K8SFileSystemUtils() {}
 
     static Optional<ConfigMap> createOrReplaceParentDirFSCM(KubernetesClient client, 
@@ -103,6 +106,8 @@ public class K8SFileSystemUtils {
                                                                          path.toRealPath().getParent().toString() +
                                                                          "]"));
         }
+        labels.put(CFG_MAP_LABEL_FSOBJ_APP_KEY, APP_NAME);
+        
         Map<String, String> annotations = new ConcurrentHashMap<>();
         annotations.put(CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY, 
                         ZonedDateTime.now().format(DateTimeFormatter.ISO_INSTANT));
@@ -151,6 +156,7 @@ public class K8SFileSystemUtils {
         if (labels.isEmpty()) {
             labels.put(CFG_MAP_LABEL_FSOBJ_TYPE_KEY, K8SFileSystemObjectType.ROOT.toString());
         } 
+        labels.put(CFG_MAP_LABEL_FSOBJ_APP_KEY, APP_NAME);
         Object[] configMaps = client.configMaps()
                                            .withLabels(labels)
                                            .list()

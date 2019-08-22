@@ -40,7 +40,8 @@ import org.uberfire.java.nio.file.WatchKey;
 import org.uberfire.java.nio.file.WatchService;
 import org.uberfire.java.nio.fs.cloud.CloudClientFactory;
 
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_LABEL_FSOBJ_TYPE_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_LABEL_FSOBJ_APP_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.APP_NAME;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getPathByFsObjCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.mapActionToKind;
 
@@ -119,7 +120,8 @@ public class K8SWatchService implements WatchService {
     private CompletableFuture<Void> triageEvents(KubernetesClient client) {
         logger.info("K8SFileSystem WatchService is starting to watch K8SFileSystem ConfigMap in namespace: [{}]",
                     client.getNamespace());
-        try (Watch watchable = client.configMaps().withLabel(CFG_MAP_LABEL_FSOBJ_TYPE_KEY)
+        try (Watch watchable = client.configMaps()
+                                     .withLabel(CFG_MAP_LABEL_FSOBJ_APP_KEY, APP_NAME)
                                      .watch(new Watcher<ConfigMap>() {
             @Override
             public void eventReceived(Action action, ConfigMap fsObjCM) {

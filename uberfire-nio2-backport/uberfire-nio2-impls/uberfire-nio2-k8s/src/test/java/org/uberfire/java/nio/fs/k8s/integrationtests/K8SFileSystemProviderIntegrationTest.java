@@ -302,8 +302,8 @@ public class K8SFileSystemProviderIntegrationTest {
             assertThat(createRootKey.watchable()).isEqualTo(root);
 
             List<WatchEvent<?>> rootEvents = new ArrayList<>();
-            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createRootKey, rootEvents, 1));
-            assertThat(rootEvents).asList().hasSize(1);
+            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createRootKey, rootEvents, 2));
+            assertThat(rootEvents).asList().hasSize(2);
 
             WatchEvent<?> firstEvent = rootEvents.get(0);
             assertThat(firstEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
