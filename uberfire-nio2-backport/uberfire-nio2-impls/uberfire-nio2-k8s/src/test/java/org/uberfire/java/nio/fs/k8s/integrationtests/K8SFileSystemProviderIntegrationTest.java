@@ -72,10 +72,10 @@ public class K8SFileSystemProviderIntegrationTest {
                 .withNamespace(TEST_NAMESPACE)
                 .build();
         client = new DefaultKubernetesClient(config);
-        client.namespaces().createNew().withNewMetadata()
-                                       .withName(TEST_NAMESPACE)
-                                       .endMetadata()
-                                       .done();
+        client.namespaces().createOrReplaceWithNew().withNewMetadata()
+                                                    .withName(TEST_NAMESPACE)
+                                                    .endMetadata()
+                                                    .done();
     }
 
     @After

@@ -33,7 +33,6 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.uberfire.java.nio.IOException;
 import org.uberfire.java.nio.file.DirectoryStream;
 import org.uberfire.java.nio.file.FileSystem;
 import org.uberfire.java.nio.file.Files;
@@ -278,16 +277,20 @@ public class K8SFileSystemTest {
 
     @Test
     public void testIsFile() {
-        ConfigMap cfm = CLIENT_FACTORY.get().configMaps().inNamespace(TEST_NAMESPACE)
-                                      .withName("k8s-fsobj-86403b0c-78b7-11e9-ad76-8c16458eff35").get();
+        ConfigMap cfm = CLIENT_FACTORY.get()
+                                      .configMaps()
+                                      .load(K8SFileSystemTest.class.getResourceAsStream("/test-k8sfs-file-configmap.yml"))
+                                      .get();
         assertThat(isFile(cfm)).isTrue();
         assertThat(isDirectory(cfm)).isFalse();
     }
 
     @Test
     public void testIsDir() {
-        ConfigMap cfm = CLIENT_FACTORY.get().configMaps().inNamespace(TEST_NAMESPACE)
-                                      .withName("k8s-fsobj-e6bb5ba5-527f-11e9-8a93-8c16458eff35").get();
+        ConfigMap cfm = CLIENT_FACTORY.get()
+                                      .configMaps()
+                                      .load(K8SFileSystemTest.class.getResourceAsStream("/test-k8sfs-dir-0-configmap.yml"))
+                                      .get();
         assertThat(isFile(cfm)).isFalse();
         assertThat(isDirectory(cfm)).isTrue();
     }
@@ -431,4 +434,25 @@ public class K8SFileSystemTest {
         
         assertThat(sb.toString()).isEqualTo(content);
     }
+    
+    @Test 
+    public void testParentDirShouldBeUpdatedAfterDelete() {
+        final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));
+        final Path root = fileSystem.getPath("/");
+        final Path testDir = fileSystem.getPath("/testDir");
+        final Path testFile = fileSystem.getPath("/testDir/testFile");
+        
+        assertThat(Files.deleteIfExists(testFile)).isTrue();
+        assertThat(Files.size(testDir)).isEqualTo(0);
+
+        boolean foundDeletedFile = false;
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
+            for (Path dir: stream) {
+               if (dir.equals(testFile)) {
+                    foundDeletedFile = true;
+                }
+            }
+        }
+        assertThat(foundDeletedFile).isFalse();
+    }   
 }

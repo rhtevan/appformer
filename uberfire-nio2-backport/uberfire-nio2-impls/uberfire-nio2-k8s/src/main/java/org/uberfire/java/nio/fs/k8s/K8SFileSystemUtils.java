@@ -54,13 +54,21 @@ public class K8SFileSystemUtils {
 
     private K8SFileSystemUtils() {}
 
-    static Optional<ConfigMap> createOrReplaceParentDirFSCM(KubernetesClient client, Path self, long selfSize) {
+    static Optional<ConfigMap> createOrReplaceParentDirFSCM(KubernetesClient client, 
+                                                            Path self, 
+                                                            long selfSize,
+                                                            boolean... isUpdateForFileDeletion) {
         String selfName = getFileNameString(self);
         Path parent = Optional.ofNullable(self.getParent()).orElseThrow(IllegalArgumentException::new);
         Map<String, String> parentContent = Optional.ofNullable(getFsObjCM(client, parent))
                 .map(ConfigMap::getData)
                 .orElseGet(HashMap::new);
-        parentContent.put(selfName, String.valueOf(selfSize));
+        
+        if (isUpdateForFileDeletion.length != 0 && isUpdateForFileDeletion[0]) {
+            parentContent.remove(selfName);
+        } else {
+            parentContent.put(selfName, String.valueOf(selfSize));
+        }
         final long parentSize = parentContent.values().stream().mapToLong(Long::parseLong).sum();
 
         return Optional.of(createOrReplaceFSCM(client, parent,
@@ -125,6 +133,16 @@ public class K8SFileSystemUtils {
                                                .endMetadata()
                                                .withData(content)
                                                .build()));
+    }
+
+    static boolean deleteAndUpdateParentCM(KubernetesClient client, Path path) {
+        ConfigMap cm = getFsObjCM(client, path);
+        if (cm != null && client.configMaps().delete(cm)) {
+            createOrReplaceParentDirFSCM(client, path, 0, true);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     static ConfigMap getFsObjCM(KubernetesClient client, Path path) {

@@ -54,10 +54,11 @@ import org.uberfire.java.nio.fs.file.SimpleFileSystemProvider;
 
 import static org.kie.soup.commons.validation.PortablePreconditions.checkCondition;
 import static org.kie.soup.commons.validation.PortablePreconditions.checkNotNull;
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_FSOBJ_CONTENT_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.CFG_MAP_FSOBJ_CONTENT_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceParentDirFSCM;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.deleteAndUpdateParentCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getFsObjCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getPathByFsObjCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.isDirectory;
@@ -165,9 +166,7 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
         checkNotNull("path", path);
         synchronized (this) {
             try {
-                return executeCloudFunction(client -> Optional.ofNullable(getFsObjCM(client, path))
-                                                              .map(cm -> client.configMaps().delete(cm))
-                                                              .orElse(Boolean.FALSE), 
+                return executeCloudFunction(client -> deleteAndUpdateParentCM(client, path), 
                                             KubernetesClient.class).get();
             } finally {
                 toGeneralPathImpl(path).clearCache();
