@@ -41,7 +41,7 @@ public class K8SWatchServiceTest {
     // The default namespace for MockKubernetes Server is 'test'
     protected static String TEST_NAMESPACE = "test";
     protected static ThreadLocal<KubernetesClient> CLIENT_FACTORY =
-            new ThreadLocal<>().withInitial(() -> SERVER.getClient());
+            ThreadLocal.withInitial(() -> SERVER.getClient());
 
     protected static final FileSystemProvider fsProvider = new K8SFileSystemProvider() {
 

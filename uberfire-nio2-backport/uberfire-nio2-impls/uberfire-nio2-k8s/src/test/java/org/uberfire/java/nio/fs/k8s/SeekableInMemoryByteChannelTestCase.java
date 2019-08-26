@@ -45,14 +45,10 @@ public class SeekableInMemoryByteChannelTestCase {
     private ByteBuffer biggerBuffer;
 
     @Before
-    public void init() {
+    public void init() throws UnsupportedEncodingException {
         this.channel = new SeekableInMemoryByteChannel();
-        try {
-            smallerBuffer = ByteBuffer.wrap(CONTENTS_SMALLER_BUFFER.getBytes(UTF8));
-            biggerBuffer = ByteBuffer.wrap(CONTENTS_BIGGER_BUFFER.getBytes(UTF8));
-        } catch (final UnsupportedEncodingException uee) {
-            throw new RuntimeException(uee);
-        }
+        smallerBuffer = ByteBuffer.wrap(CONTENTS_SMALLER_BUFFER.getBytes(UTF8));
+        biggerBuffer = ByteBuffer.wrap(CONTENTS_BIGGER_BUFFER.getBytes(UTF8));
     }
 
     @After
