@@ -398,21 +398,15 @@ public class K8SFileSystemTest {
         
         assertThat(Files.exists(aDir)).isTrue();
         assertThat(Files.isDirectory(aDir)).isTrue();
-        
-        boolean foundNewDir = false;
+
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
-            for (Path dir: stream) {
-               if (dir.equals(aDir)) {
-                    foundNewDir = true;
-                }
-            }
+            ArrayList<Path> dirContent = Lists.newArrayList(stream);
+            assertThat(dirContent).asList().contains(aDir);
         }
-        assertThat(foundNewDir).isTrue();
 
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(testDir)) {
             ArrayList<Path> dirContent = Lists.newArrayList(stream);
-            assertThat(dirContent.size()).isEqualTo(1);
-            assertThat(dirContent.get(0)).isEqualTo(testFile);
+            assertThat(dirContent).asList().containsExactly(testFile);
         }
     }
     
@@ -465,14 +459,9 @@ public class K8SFileSystemTest {
         assertThat(Files.deleteIfExists(testFile)).isTrue();
         assertThat(Files.size(testDir)).isEqualTo(0);
 
-        boolean foundDeletedFile = false;
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
-            for (Path dir: stream) {
-               if (dir.equals(testFile)) {
-                    foundDeletedFile = true;
-                }
-            }
+            ArrayList<Path> dirContent = Lists.newArrayList(stream);
+            assertThat(dirContent).asList().doesNotContain(testFile);
         }
-        assertThat(foundDeletedFile).isFalse();
     }   
 }
