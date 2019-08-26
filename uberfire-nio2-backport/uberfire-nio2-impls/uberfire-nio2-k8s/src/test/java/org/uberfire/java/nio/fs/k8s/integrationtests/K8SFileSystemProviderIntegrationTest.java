@@ -113,6 +113,24 @@ public class K8SFileSystemProviderIntegrationTest {
         assertThat(Files.deleteIfExists(fileInRootFolder)).isTrue();
     }
 
+    @Test
+    public void testDeleteFolderWithFiles() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final Path testDir = kfs.getPath("/testDir");
+        final Path testFirstFile = kfs.getPath("/testDir/testFirstFile");
+        final Path testSecondFile = kfs.getPath("/testDir/testSecondFile");
+
+        String testFileContent = "Hello World";
+        createOrEditFile(testFirstFile, testFileContent);
+        createOrEditFile(testSecondFile, testFileContent);
+
+        assertThat(Files.exists(testDir)).isTrue();
+        Files.delete(testDir);
+        assertThat(Files.exists(testDir)).isFalse();
+        assertThat(Files.exists(testFirstFile)).isFalse();
+        assertThat(Files.exists(testSecondFile)).isFalse();
+    }
+
     @Test(expected = FileAlreadyExistsException.class)
     public void simpleRootFolderCreateDuplicateFolderTest() {
         final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));

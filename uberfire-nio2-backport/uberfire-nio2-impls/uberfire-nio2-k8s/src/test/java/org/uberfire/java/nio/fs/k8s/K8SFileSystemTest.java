@@ -38,6 +38,7 @@ import org.junit.Test;
 import org.uberfire.java.nio.file.DirectoryStream;
 import org.uberfire.java.nio.file.FileSystem;
 import org.uberfire.java.nio.file.Files;
+import org.uberfire.java.nio.file.NoSuchFileException;
 import org.uberfire.java.nio.file.Path;
 import org.uberfire.java.nio.file.spi.FileSystemProvider;
 import org.uberfire.java.nio.fs.cloud.CloudClientConstants;
@@ -320,6 +321,29 @@ public class K8SFileSystemTest {
     public void testDelete() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
         final Path f = kfs.getPath("/testDelFile");
+
+        String testFileContent = "Hello World";
+        newFileWithContent(f, testFileContent);
+
+        assertThat(Files.exists(f)).isTrue();
+        Files.delete(f);
+        assertThat(Files.exists(f)).isFalse();
+    }
+
+    @Test(expected = NoSuchFileException.class)
+    public void testDeleteNotExistingFile() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final Path f = kfs.getPath("/testDelFile");
+
+        Files.delete(f);
+    }
+
+    @Test
+    public void testDeleteIfExists() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final Path f = kfs.getPath("/testDelFile");
+
+        assertThat(Files.deleteIfExists(f)).isFalse();
 
         String testFileContent = "Hello World";
         newFileWithContent(f, testFileContent);
