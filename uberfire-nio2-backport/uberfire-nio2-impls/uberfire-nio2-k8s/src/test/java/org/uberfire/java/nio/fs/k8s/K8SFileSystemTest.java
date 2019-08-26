@@ -161,7 +161,7 @@ public class K8SFileSystemTest {
         // Create a new empty dir under root
         createOrReplaceFSCM(CLIENT_FACTORY.get(), 
                             myDir,
-                            createOrReplaceParentDirFSCM(CLIENT_FACTORY.get(), myDir, 0L),
+                            createOrReplaceParentDirFSCM(CLIENT_FACTORY.get(), myDir, 0L, false),
                             Collections.emptyMap(),
                             true);
         ConfigMap myDirCM = getFsObjCM(CLIENT_FACTORY.get(), myDir);

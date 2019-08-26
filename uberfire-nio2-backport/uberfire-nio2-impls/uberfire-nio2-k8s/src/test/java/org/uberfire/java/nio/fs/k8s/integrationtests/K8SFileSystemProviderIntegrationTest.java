@@ -114,6 +114,22 @@ public class K8SFileSystemProviderIntegrationTest {
     }
 
     @Test
+    public void testDeleteRoot() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final Path testDir = kfs.getPath("/testDeleRootDir");
+        final Path testFile = kfs.getPath("/testDeleRootDir/testDeleRootDirFile");
+        final Path root = testFile.getRoot();
+
+        String testFileContent = "Hello World";
+        createOrEditFile(testFile, testFileContent);
+
+        assertThat(Files.exists(testDir)).isTrue();
+        Files.delete(root);
+        assertThat(Files.exists(testDir)).isFalse();
+        assertThat(Files.exists(testFile)).isFalse();
+    }
+    
+    @Test
     public void testDeleteFolderWithFiles() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
         final Path testDir = kfs.getPath("/testDir");
@@ -334,20 +350,15 @@ public class K8SFileSystemProviderIntegrationTest {
             assertThat(createWatchDirKey.watchable()).isEqualTo(fileInRootFolder);
 
             List<WatchEvent<?>> watchDirEvents = new ArrayList<>();
-            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createWatchDirKey, watchDirEvents, 3));
-            assertThat(watchDirEvents).asList().hasSize(3);
+            Awaitility.await().atMost(Duration.FIVE_SECONDS).until(fetchWatchEvents(createWatchDirKey, watchDirEvents, 2));
+            assertThat(watchDirEvents).asList().hasSize(2);
 
             WatchEvent<?> firstWatchDirEvent = watchDirEvents.get(0);
             assertThat(firstWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_CREATE);
             assertThat(firstWatchDirEvent.count()).isEqualTo(1);
             assertThat(firstWatchDirEvent.context()).isEqualTo(fileInRootFolder.getFileName());
 
-            WatchEvent<?> secondWatchDirEvent = watchDirEvents.get(1);
-            assertThat(secondWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_MODIFY);
-            assertThat(secondWatchDirEvent.count()).isEqualTo(1);
-            assertThat(secondWatchDirEvent.context()).isEqualTo(fileInRootFolder.getFileName());
-
-            WatchEvent<?> thirdWatchDirEvent = watchDirEvents.get(2);
+            WatchEvent<?> thirdWatchDirEvent = watchDirEvents.get(1);
             assertThat(thirdWatchDirEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_DELETE);
             assertThat(thirdWatchDirEvent.count()).isEqualTo(1);
             assertThat(thirdWatchDirEvent.context()).isEqualTo(fileInRootFolder.getFileName());

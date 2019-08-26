@@ -60,14 +60,14 @@ public class K8SFileSystemUtils {
     static Optional<ConfigMap> createOrReplaceParentDirFSCM(KubernetesClient client, 
                                                             Path self, 
                                                             long selfSize,
-                                                            boolean... isUpdateForFileDeletion) {
+                                                            boolean isUpdateForFileDeletion) {
         String selfName = getFileNameString(self);
         Path parent = Optional.ofNullable(self.getParent()).orElseThrow(IllegalArgumentException::new);
         Map<String, String> parentContent = Optional.ofNullable(getFsObjCM(client, parent))
                 .map(ConfigMap::getData)
                 .orElseGet(HashMap::new);
         
-        if (isUpdateForFileDeletion.length != 0 && isUpdateForFileDeletion[0]) {
+        if (isUpdateForFileDeletion) {
             parentContent.remove(selfName);
         } else {
             parentContent.put(selfName, String.valueOf(selfSize));
@@ -77,7 +77,7 @@ public class K8SFileSystemUtils {
         return Optional.of(createOrReplaceFSCM(client, parent,
                                                parent.getRoot().equals(parent)
                                                        ? Optional.empty()
-                                                       : createOrReplaceParentDirFSCM(client, parent, parentSize),
+                                                       : createOrReplaceParentDirFSCM(client, parent, parentSize, false),
                                                parentContent,
                                                true));
     }
@@ -142,8 +142,12 @@ public class K8SFileSystemUtils {
 
     static boolean deleteAndUpdateParentCM(KubernetesClient client, Path path) {
         ConfigMap cm = getFsObjCM(client, path);
-        if (cm != null && client.configMaps().delete(cm)) {
-            createOrReplaceParentDirFSCM(client, path, 0, true);
+        if (cm != null && client.configMaps()
+                                .withName(cm.getMetadata().getName())
+                                .cascading(true)
+                                .delete()) {
+            Optional.ofNullable(path.getParent())
+                    .ifPresent(p -> createOrReplaceParentDirFSCM(client, path, 0, true));
             return true;
         } else {
             return false;
