@@ -344,6 +344,11 @@ public class K8SFileSystemProviderIntegrationTest {
             assertThat(firstEvent.count()).isEqualTo(1);
             assertThat(firstEvent.context()).isNull();
 
+            WatchEvent<?> secondEvent = rootEvents.get(1);
+            assertThat(secondEvent.kind()).isEqualTo(StandardWatchEventKind.ENTRY_MODIFY);
+            assertThat(secondEvent.count()).isEqualTo(1);
+            assertThat(secondEvent.context()).isNull();
+
             // Watched file is created and deleted then
             WatchKey createWatchDirKey = watcher.poll();
             assertThat(createWatchDirKey.isValid()).isTrue();
