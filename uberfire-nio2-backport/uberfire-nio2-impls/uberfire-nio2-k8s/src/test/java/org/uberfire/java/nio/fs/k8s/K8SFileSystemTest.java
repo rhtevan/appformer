@@ -18,6 +18,7 @@ package org.uberfire.java.nio.fs.k8s;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
@@ -37,6 +38,7 @@ import org.junit.Test;
 import org.uberfire.java.nio.file.DirectoryStream;
 import org.uberfire.java.nio.file.FileSystem;
 import org.uberfire.java.nio.file.Files;
+import org.uberfire.java.nio.file.NoSuchFileException;
 import org.uberfire.java.nio.file.Path;
 import org.uberfire.java.nio.file.spi.FileSystemProvider;
 import org.uberfire.java.nio.fs.cloud.CloudClientConstants;
@@ -61,7 +63,7 @@ public class K8SFileSystemTest {
     // The default namespace for MockKubernetes Server is 'test'
     protected static String TEST_NAMESPACE = "test";
     protected static ThreadLocal<KubernetesClient> CLIENT_FACTORY =
-            new ThreadLocal<>().withInitial(() -> SERVER.getClient());
+            ThreadLocal.withInitial(() -> SERVER.getClient());
 
     protected static final FileSystemProvider fsProvider = new K8SFileSystemProvider() {
 
@@ -72,12 +74,10 @@ public class K8SFileSystemTest {
 
     };
 
-    protected String newFileWithContent(final Path newFile, final String testFileContent) {
+    protected String newFileWithContent(final Path newFile, final String testFileContent) throws IOException {
         Files.createFile(newFile);
         try (BufferedWriter writer = Files.newBufferedWriter(newFile, StandardCharsets.UTF_8)) {
             writer.write(testFileContent, 0, testFileContent.length());
-        } catch (Exception e) {
-            e.printStackTrace();
         }
         return testFileContent;
     }
@@ -153,7 +153,7 @@ public class K8SFileSystemTest {
     }
     
     @Test 
-    public void testCreateOrReplaceFSCM() {
+    public void testCreateOrReplaceFSCM() throws IOException {
         final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));
         final Path myDir = fileSystem.getPath("/myDir");
         final Path newFile = fileSystem.getPath("/newDir/newFile");
@@ -318,9 +318,32 @@ public class K8SFileSystemTest {
     }
     
     @Test
-    public void testDelete() {
+    public void testDelete() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
         final Path f = kfs.getPath("/testDelFile");
+
+        String testFileContent = "Hello World";
+        newFileWithContent(f, testFileContent);
+
+        assertThat(Files.exists(f)).isTrue();
+        Files.delete(f);
+        assertThat(Files.exists(f)).isFalse();
+    }
+
+    @Test(expected = NoSuchFileException.class)
+    public void testDeleteNotExistingFile() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final Path f = kfs.getPath("/testDelFile");
+
+        Files.delete(f);
+    }
+
+    @Test
+    public void testDeleteIfExists() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final Path f = kfs.getPath("/testDelFile");
+
+        assertThat(Files.deleteIfExists(f)).isFalse();
 
         String testFileContent = "Hello World";
         newFileWithContent(f, testFileContent);
@@ -331,7 +354,7 @@ public class K8SFileSystemTest {
     }
 
     @Test
-    public void testCopy() {
+    public void testCopy() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
         final Path src = kfs.getPath("/testCopySrc");
         final Path target = kfs.getPath("/testCopyTarget");
@@ -347,7 +370,7 @@ public class K8SFileSystemTest {
     }
 
     @Test
-    public void testMove() {
+    public void testMove() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
         final Path src = kfs.getPath("/testMoveSrc");
         final Path target = kfs.getPath("/testMoveTarget");
@@ -375,26 +398,20 @@ public class K8SFileSystemTest {
         
         assertThat(Files.exists(aDir)).isTrue();
         assertThat(Files.isDirectory(aDir)).isTrue();
-        
-        boolean foundNewDir = false;
+
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
-            for (Path dir: stream) {
-               if (dir.equals(aDir)) {
-                    foundNewDir = true;
-                }
-            }
+            ArrayList<Path> dirContent = Lists.newArrayList(stream);
+            assertThat(dirContent).asList().contains(aDir);
         }
-        assertThat(foundNewDir).isTrue();
 
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(testDir)) {
             ArrayList<Path> dirContent = Lists.newArrayList(stream);
-            assertThat(dirContent.size()).isEqualTo(1);
-            assertThat(dirContent.get(0)).isEqualTo(testFile);
+            assertThat(dirContent).asList().containsExactly(testFile);
         }
     }
     
     @Test
-    public void testOverwriteFile() {
+    public void testOverwriteFile() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
         final Path testFile = kfs.getPath("/testOverWrite.txt");
         final String content = "Large content, blah, blah, blah...";
@@ -405,8 +422,6 @@ public class K8SFileSystemTest {
 
         try (BufferedWriter writer = Files.newBufferedWriter(testFile, Charset.forName("UTF-8"))) {
             writer.write(smallerContent, 0, smallerContent.length());
-        } catch (Exception e) {
-            e.printStackTrace();
         }
         
         StringBuffer sb = new StringBuffer();
@@ -415,15 +430,12 @@ public class K8SFileSystemTest {
             while ((line = reader.readLine()) != null) {
                 sb.append(line);
             }
-        } catch (Exception x) {
         }
         
         assertThat(sb.toString()).isEqualTo(smallerContent);
         
         try (BufferedWriter writer = Files.newBufferedWriter(testFile, Charset.forName("UTF-8"))) {
             writer.write(content, 0, content.length());
-        } catch (Exception e) {
-            e.printStackTrace();
         }
         
         sb = new StringBuffer();
@@ -432,7 +444,6 @@ public class K8SFileSystemTest {
             while ((line = reader.readLine()) != null) {
                 sb.append(line);
             }
-        } catch (Exception x) {
         }
         
         assertThat(sb.toString()).isEqualTo(content);
@@ -448,14 +459,9 @@ public class K8SFileSystemTest {
         assertThat(Files.deleteIfExists(testFile)).isTrue();
         assertThat(Files.size(testDir)).isEqualTo(0);
 
-        boolean foundDeletedFile = false;
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
-            for (Path dir: stream) {
-               if (dir.equals(testFile)) {
-                    foundDeletedFile = true;
-                }
-            }
+            ArrayList<Path> dirContent = Lists.newArrayList(stream);
+            assertThat(dirContent).asList().doesNotContain(testFile);
         }
-        assertThat(foundDeletedFile).isFalse();
     }   
 }
