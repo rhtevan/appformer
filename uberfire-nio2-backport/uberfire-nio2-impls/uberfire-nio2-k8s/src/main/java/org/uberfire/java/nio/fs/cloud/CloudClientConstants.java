@@ -15,7 +15,7 @@
 
 package org.uberfire.java.nio.fs.cloud;
 
-import com.google.common.base.Charsets;
+import java.nio.charset.StandardCharsets;
 
 public class CloudClientConstants {
 
@@ -24,5 +24,5 @@ public class CloudClientConstants {
     public static final String DEFAULT_TOKEN_LOCATION = "/var/run/secrets/kubernetes.io/serviceaccount/token";
     public static final String ENV_VAR_API_SERVICE_HOST = "KUBERNETES_SERVICE_HOST";
     public static final String ENV_VAR_API_SERVER_PORT = "KUBERNETES_SERVICE_PORT";
-    public static final String ENCODING = System.getProperty("file.encoding", Charsets.UTF_8.name());
+    public static final String ENCODING = System.getProperty("file.encoding", StandardCharsets.UTF_8.name());
 }
