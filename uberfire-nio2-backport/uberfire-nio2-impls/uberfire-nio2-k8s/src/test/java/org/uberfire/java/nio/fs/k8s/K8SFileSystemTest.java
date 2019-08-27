@@ -44,6 +44,10 @@ import org.uberfire.java.nio.file.spi.FileSystemProvider;
 import org.uberfire.java.nio.fs.cloud.CloudClientConstants;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_LABEL_FSOBJ_TYPE_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceParentDirFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getCreationTime;
@@ -155,51 +159,51 @@ public class K8SFileSystemTest {
     @Test 
     public void testCreateOrReplaceFSCM() throws IOException {
         final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));
-        final Path myDir = fileSystem.getPath("/myDir");
-        final Path newFile = fileSystem.getPath("/newDir/newFile");
+        final Path testDir = fileSystem.getPath("/testCreateOrReplaceFSCMDir");
+        final Path testFile = fileSystem.getPath("/testCreateOrReplaceFSCMDir/testCreateOrReplaceFSCMFile");
         
         // Create a new empty dir under root
         createOrReplaceFSCM(CLIENT_FACTORY.get(), 
-                            myDir,
-                            createOrReplaceParentDirFSCM(CLIENT_FACTORY.get(), myDir, 0L, false),
+                            testDir,
+                            createOrReplaceParentDirFSCM(CLIENT_FACTORY.get(), testDir, 0L, false),
                             Collections.emptyMap(),
                             true);
-        ConfigMap myDirCM = getFsObjCM(CLIENT_FACTORY.get(), myDir);
+        ConfigMap testDirCM = getFsObjCM(CLIENT_FACTORY.get(), testDir);
         
         ConfigMap rootCM = CLIENT_FACTORY.get().configMaps().inNamespace(TEST_NAMESPACE)
                 .withName("k8s-fsobj-e6bb5ba5-527f-11e9-8a93-8c16458eff35").get();
 
         // Check CM data of the empty dir
-        assertThat(myDirCM).isNotNull();
-        assertThat(myDirCM.getMetadata().getLabels().get("k8s.fs.nio.java.uberfire.org/fsobj-name-0"))
-                                                    .isEqualTo("myDir");
-        assertThat(myDirCM.getMetadata().getLabels().get(K8SFileSystemConstants.CFG_MAP_LABEL_FSOBJ_TYPE_KEY))
+        assertThat(testDirCM).isNotNull();
+        assertThat(testDirCM.getMetadata().getLabels().get("k8s.fs.nio.java.uberfire.org/fsobj-name-0"))
+                                                    .isEqualTo("testCreateOrReplaceFSCMDir");
+        assertThat(testDirCM.getMetadata().getLabels().get(CFG_MAP_LABEL_FSOBJ_TYPE_KEY))
                                                     .isEqualTo(K8SFileSystemObjectType.DIR.toString());
-        assertThat(myDirCM.getMetadata().getAnnotations().get(K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY))
+        assertThat(testDirCM.getMetadata().getAnnotations().get(CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY))
                                                     .isEqualTo("0");
-        assertThat(myDirCM.getData().isEmpty()).isTrue();
+        assertThat(testDirCM.getData().isEmpty()).isTrue();
         
         // Check the ref-link to the root CM
-        assertThat(myDirCM.getMetadata().getOwnerReferences().get(0).getKind())
+        assertThat(testDirCM.getMetadata().getOwnerReferences().get(0).getKind())
             .isEqualTo(rootCM.getKind());
-        assertThat(myDirCM.getMetadata().getOwnerReferences().get(0).getName())
+        assertThat(testDirCM.getMetadata().getOwnerReferences().get(0).getName())
             .isEqualTo(rootCM.getMetadata().getName());
         
         // Create new file followed by testing write to and read from the file
         String testFileContent = "Hello World";
-        newFileWithContent(newFile, testFileContent);
+        newFileWithContent(testFile, testFileContent);
         
-        ConfigMap newDirCM = getFsObjCM(CLIENT_FACTORY.get(), fileSystem.getPath("/newDir"));
-        ConfigMap newFileCM = getFsObjCM(CLIENT_FACTORY.get(), newFile);
+        ConfigMap newDirCM = getFsObjCM(CLIENT_FACTORY.get(), fileSystem.getPath("/testCreateOrReplaceFSCMDir"));
+        ConfigMap newFileCM = getFsObjCM(CLIENT_FACTORY.get(), testFile);
         
         assertThat(newDirCM).isNotNull();
         assertThat(newFileCM).isNotNull();
-        assertThat(newDirCM.getMetadata().getAnnotations().get(K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY))
+        assertThat(newDirCM.getMetadata().getAnnotations().get(CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY))
             .isNotNull();
-        assertThat(newFileCM.getMetadata().getAnnotations().get(K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY))
+        assertThat(newFileCM.getMetadata().getAnnotations().get(CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY))
             .isNotNull();
-        assertThat(newFileCM.getData().get(K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
-        assertThat(Files.size(newFile)).isEqualTo(testFileContent.length());
+        assertThat(newFileCM.getData().get(CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
+        assertThat(Files.size(testFile)).isEqualTo(testFileContent.length());
     }
 
     @Test
@@ -320,7 +324,7 @@ public class K8SFileSystemTest {
     @Test
     public void testDelete() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
-        final Path f = kfs.getPath("/testDelFile");
+        final Path f = kfs.getPath("/testDeleteFile");
 
         String testFileContent = "Hello World";
         newFileWithContent(f, testFileContent);
@@ -333,7 +337,7 @@ public class K8SFileSystemTest {
     @Test(expected = NoSuchFileException.class)
     public void testDeleteNotExistingFile() {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
-        final Path f = kfs.getPath("/testDelFile");
+        final Path f = kfs.getPath("/testDeleteNotExistingFile");
 
         Files.delete(f);
     }
@@ -341,7 +345,7 @@ public class K8SFileSystemTest {
     @Test
     public void testDeleteIfExists() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
-        final Path f = kfs.getPath("/testDelFile");
+        final Path f = kfs.getPath("/testDeleteIfExists");
 
         assertThat(Files.deleteIfExists(f)).isFalse();
 
@@ -366,7 +370,7 @@ public class K8SFileSystemTest {
         
         assertThat(Files.exists(target)).isTrue();
         assertThat(getFsObjCM(CLIENT_FACTORY.get(), target).getData()
-                   .get(K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
+                   .get(CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
     }
 
     @Test
@@ -383,7 +387,7 @@ public class K8SFileSystemTest {
         assertThat(Files.notExists(src)).isTrue();
         assertThat(Files.exists(target)).isTrue();
         assertThat(getFsObjCM(CLIENT_FACTORY.get(), target).getData()
-                   .get(K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
+                   .get(CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
     }
     
     @Test
@@ -391,7 +395,7 @@ public class K8SFileSystemTest {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
         final Path testDir = kfs.getPath("/testDir");
         final Path testFile = kfs.getPath("/testDir/testFile");
-        final Path aDir = kfs.getPath("/aDir");
+        final Path aDir = kfs.getPath("/testCreateAndReadDir");
         final Path root = aDir.getRoot();
         
         Files.createDirectory(aDir);
@@ -413,7 +417,7 @@ public class K8SFileSystemTest {
     @Test
     public void testOverwriteFile() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
-        final Path testFile = kfs.getPath("/testOverWrite.txt");
+        final Path testFile = kfs.getPath("/testOverwriteFile");
         final String content = "Large content, blah, blah, blah...";
         final String smallerContent = "Small";
         
@@ -450,18 +454,21 @@ public class K8SFileSystemTest {
     }
     
     @Test 
-    public void testParentDirShouldBeUpdatedAfterDelete() {
+    public void testParentDirShouldBeUpdatedAfterDelete() throws IOException {
         final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));
         final Path root = fileSystem.getPath("/");
-        final Path testDir = fileSystem.getPath("/testDir");
-        final Path testFile = fileSystem.getPath("/testDir/testFile");
+        final Path testDir = fileSystem.getPath("/testParentDirShouldBeUpdatedAfterDeleteDir");
+        final Path testFile = fileSystem.getPath("/testParentDirShouldBeUpdatedAfterDeleteDir/testParentDirShouldBeUpdatedAfterDeleteFile");
         
+        newFileWithContent(testFile, "I'm here");
         assertThat(Files.deleteIfExists(testFile)).isTrue();
         assertThat(Files.size(testDir)).isEqualTo(0);
+        
+        assertThat(getFsObjCM(CLIENT_FACTORY.get(), testDir).getData().isEmpty()).isTrue();
 
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
             ArrayList<Path> dirContent = Lists.newArrayList(stream);
-            assertThat(dirContent).asList().doesNotContain(testFile);
+            assertThat(dirContent).asList().contains(testDir);
         }
     }   
 }
