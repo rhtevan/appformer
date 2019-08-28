@@ -470,5 +470,10 @@ public class K8SFileSystemTest {
             ArrayList<Path> dirContent = Lists.newArrayList(stream);
             assertThat(dirContent).asList().contains(testDir);
         }
+        
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(testDir)) {
+            ArrayList<Path> dirContent = Lists.newArrayList(stream);
+            assertThat(dirContent).asList().isEmpty();
+        }
     }   
 }

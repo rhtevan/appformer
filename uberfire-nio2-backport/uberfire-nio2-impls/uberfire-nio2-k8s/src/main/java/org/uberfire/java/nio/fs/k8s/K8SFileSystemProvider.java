@@ -136,7 +136,7 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
         ConfigMap dirCM = executeCloudFunction(client -> getFsObjCM(client, dir), KubernetesClient.class)
                 .orElseThrow(() -> new NotDirectoryException(dir.toString()));
         if (dirCM.getData().isEmpty()) {
-            throw new IOException("Directory [" + dir.toString() + "] is empty.");
+            return new Path[0];
         }
         
         String separator = dir.getFileSystem().getSeparator();
@@ -145,9 +145,9 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
                     .keySet()
                     .stream()
                     .map(fileName -> GeneralPathImpl.create(dir.getFileSystem(), 
-                                                            (dirPathString.endsWith(separator) ? 
-                                                             dirPathString :
-                                                             dirPathString.concat(separator)).concat(fileName), 
+                                                           (dirPathString.endsWith(separator) ? 
+                                                            dirPathString :
+                                                            dirPathString.concat(separator)).concat(fileName), 
                                                             false))
                     .toArray(Path[]::new);
     }
