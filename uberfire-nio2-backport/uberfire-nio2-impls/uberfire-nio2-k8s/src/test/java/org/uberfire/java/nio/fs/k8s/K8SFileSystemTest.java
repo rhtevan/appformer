@@ -25,6 +25,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import com.google.common.collect.Lists;
@@ -38,12 +39,14 @@ import org.junit.Test;
 import org.uberfire.java.nio.file.DirectoryStream;
 import org.uberfire.java.nio.file.FileSystem;
 import org.uberfire.java.nio.file.Files;
+import org.uberfire.java.nio.file.InvalidPathException;
 import org.uberfire.java.nio.file.NoSuchFileException;
 import org.uberfire.java.nio.file.Path;
 import org.uberfire.java.nio.file.spi.FileSystemProvider;
 import org.uberfire.java.nio.fs.cloud.CloudClientConstants;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.catchThrowable;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY;
@@ -59,6 +62,7 @@ import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getPathByFsObjCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getSize;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.isDirectory;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.isFile;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.validateAndBuildPathLabel;
 
 public class K8SFileSystemTest {
 
@@ -395,7 +399,7 @@ public class K8SFileSystemTest {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
         final Path testDir = kfs.getPath("/testDir");
         final Path testFile = kfs.getPath("/testDir/testFile");
-        final Path aDir = kfs.getPath("/testCreateAndReadDir");
+        final Path aDir = kfs.getPath("/.testCreateAndReadDir");
         final Path root = aDir.getRoot();
         
         Files.createDirectory(aDir);
@@ -476,4 +480,31 @@ public class K8SFileSystemTest {
             assertThat(dirContent).asList().isEmpty();
         }
     }   
+    
+    @Test
+    public void testFileNameValidation() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final Path invalid = kfs.getPath("/#weirdFileName$@#^&*");
+        final Path hidden = kfs.getPath("/.testFileNameValidation");
+        
+        assertThat(catchThrowable(() -> validateAndBuildPathLabel(new HashMap<String, String>(), invalid.getFileName())))
+            .isInstanceOf(InvalidPathException.class);
+        assertThat(catchThrowable(() -> validateAndBuildPathLabel(new HashMap<String, String>(), hidden.getFileName())))
+            .isNull();
+        
+        assertThat(catchThrowable(() -> newFileWithContent(invalid, "blah...")))
+            .isInstanceOf(org.uberfire.java.nio.IOException.class)
+            .hasRootCauseInstanceOf(InvalidPathException.class);
+    }
+    
+    @Test
+    public void testCreateHiddenFile() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final Path hidden = kfs.getPath("/.testCreateHiddenDir/.testCreateHiddenFile");
+        
+        newFileWithContent(hidden, "blah...");
+        ConfigMap cm = getFsObjCM(CLIENT_FACTORY.get(), hidden);
+        assertThat(Files.exists(hidden)).isTrue();
+        assertThat(getPathByFsObjCM(kfs, cm)).isEqualTo(hidden); 
+    }
 }

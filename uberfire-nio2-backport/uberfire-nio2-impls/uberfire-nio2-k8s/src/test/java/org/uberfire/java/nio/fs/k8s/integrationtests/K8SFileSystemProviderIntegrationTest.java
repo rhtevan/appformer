@@ -116,8 +116,8 @@ public class K8SFileSystemProviderIntegrationTest {
     @Test
     public void testDeleteRoot() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
-        final Path testDir = kfs.getPath("/testDeleRootDir");
-        final Path testFile = kfs.getPath("/testDeleRootDir/testDeleRootDirFile");
+        final Path testDir = kfs.getPath("/.testDeleRootDir");
+        final Path testFile = kfs.getPath("/.testDeleRootDir/.testDeleRootDirFile");
         final Path root = testFile.getRoot();
 
         String testFileContent = "Hello World";
@@ -224,7 +224,7 @@ public class K8SFileSystemProviderIntegrationTest {
     public void testWatchCreateFile() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path root = kfs.getPath("/");
-        final Path fileInRootFolder = kfs.getPath("/test.txt");
+        final Path fileInRootFolder = kfs.getPath("/.test.txt");
 
         try (WatchService watcher = kfs.newWatchService()){
             fileInRootFolder.register(watcher);

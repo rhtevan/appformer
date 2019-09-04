@@ -16,6 +16,8 @@
 
 package org.uberfire.java.nio.fs.k8s;
 
+import java.util.regex.Pattern;
+
 public class K8SFileSystemConstants {
 
     private K8SFileSystemConstants() {}
@@ -32,4 +34,9 @@ public class K8SFileSystemConstants {
     public static final String K8S_FS_MAX_CAPACITY_PROPERTY_NAME = "org.uberfire.java.nio.fs.k8s.max.file.size";
     public static final String K8S_FS_APP_PROPERTY_NAME = "org.uberfire.java.nio.fs.k8s.app";
     public static final String K8S_FS_APP_DEFAULT_VALUE = "unknown";
+    
+    public static final Pattern K8S_FS_NAME_RESTRICATION = Pattern.compile("(([A-Za-z0-9.][-A-Za-z0-9_.]*)?[A-Za-z0-9])?");
+    public static final int K8S_FS_NAME_MAX_LENGTH = 63;
+    public static final String K8S_FS_HIDDEN_FILE_INDICATOR = ".";
+    public static final String K8S_FS_HIDDEN_FILE_INDICATOR_SUFFIX = "0";
 }

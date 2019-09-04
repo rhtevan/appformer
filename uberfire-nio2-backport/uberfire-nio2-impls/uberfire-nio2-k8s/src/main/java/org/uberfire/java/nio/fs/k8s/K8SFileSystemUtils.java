@@ -33,6 +33,7 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.Watcher.Action;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.uberfire.java.nio.file.InvalidPathException;
 import org.uberfire.java.nio.file.Path;
 import org.uberfire.java.nio.file.StandardWatchEventKind;
 import org.uberfire.java.nio.file.WatchEvent.Kind;
@@ -47,13 +48,16 @@ import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_LABEL_
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_LABEL_FSOBJ_TYPE_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_APP_DEFAULT_VALUE;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_APP_PROPERTY_NAME;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_HIDDEN_FILE_INDICATOR;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_HIDDEN_FILE_INDICATOR_SUFFIX;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_NAME_MAX_LENGTH;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_NAME_RESTRICATION;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemObjectType.UNKNOWN;
 
 
 public class K8SFileSystemUtils {
 
     public static final String APP_NAME = System.getProperty(K8S_FS_APP_PROPERTY_NAME, K8S_FS_APP_DEFAULT_VALUE);
-
     private static final Logger logger = LoggerFactory.getLogger(K8SFileSystemUtils.class);
     private K8SFileSystemUtils() {}
 
@@ -196,16 +200,36 @@ public class K8SFileSystemUtils {
         return content;
     }
 
-    static  Map<String, String> getFsObjNameElementLabel(Path path) {
-        Map<String, String> labels = new HashMap<>();
+    static Map<String, String> getFsObjNameElementLabel(Path path) {
+        Map<String, String> labels = new ConcurrentHashMap<>();
         path.toAbsolutePath().toRealPath().iterator().forEachRemaining(
-            subPath -> labels.put(CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX + labels.size(), subPath.toString())
-        );
+            pathElement -> validateAndBuildPathLabel(labels, pathElement));
         return labels;
     }
     
+    static void validateAndBuildPathLabel(Map<String, String> labels, Path pathElement) {
+        StringBuilder nameKeyBuilder = new StringBuilder(CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX); 
+        String pathElementStr = pathElement.toString();
+        
+        nameKeyBuilder.append(labels.size());
+        if (K8S_FS_NAME_RESTRICATION.matcher(pathElementStr).matches() 
+                && pathElementStr.length() < K8S_FS_NAME_MAX_LENGTH) {
+            if (pathElementStr.startsWith(K8S_FS_HIDDEN_FILE_INDICATOR)) {
+                pathElementStr = pathElementStr.substring(1);
+                nameKeyBuilder.append(K8S_FS_HIDDEN_FILE_INDICATOR).append(K8S_FS_HIDDEN_FILE_INDICATOR_SUFFIX);
+            }
+        } else {
+            throw new InvalidPathException(pathElementStr, 
+                "A valid k8s filesystem object name must be less than " +
+                K8S_FS_NAME_MAX_LENGTH + 
+                " characters and valid by '" +
+                K8S_FS_NAME_RESTRICATION.toString() + "'"); 
+        }
+        labels.put(nameKeyBuilder.toString(), pathElementStr);
+    }
+    
     static String getFileNameString(Path path) {
-        return Optional.ofNullable(path.getFileName()).map(Path::toString).orElse("/");
+        return Optional.ofNullable(path.getFileName()).map(Path::toString).orElse(K8SFileSystem.UNIX_SEPARATOR_STRING);
     }
 
     static long getSize(ConfigMap fileCM) {
@@ -229,14 +253,24 @@ public class K8SFileSystemUtils {
             throw new IllegalArgumentException("Invalid K8SFileSystem ConfigMap - Missing required labels");
         }
         if (labels.containsValue(K8SFileSystemObjectType.ROOT.toString())) {
-            return fs.getPath("/");
+            return fs.getPath(fs.getSeparator());
         }
         labels.entrySet()
-            .stream()
-            .filter(entry -> entry.getKey().startsWith(CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX))
-            .sorted(Map.Entry.comparingByKey())
-            .forEach(entry -> pathBuilder.append(fs.getSeparator()).append(entry.getValue()));
+              .stream()
+              .filter(entry -> entry.getKey().startsWith(CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX))
+              .sorted(Map.Entry.comparingByKey())
+              .forEach(entry -> pathBuilder.append(fs.getSeparator())
+                                           .append(extractPathElementStringWithHiddenIndicator(entry)));
         return fs.getPath(pathBuilder.toString());
+    }
+    
+    static String extractPathElementStringWithHiddenIndicator(Map.Entry<String, String> entry) {
+        String pes = entry.getValue();
+        if (entry.getKey().endsWith(K8S_FS_HIDDEN_FILE_INDICATOR.concat(K8S_FS_HIDDEN_FILE_INDICATOR_SUFFIX))) {
+            return K8S_FS_HIDDEN_FILE_INDICATOR.concat(pes);
+        } else {
+            return pes;
+        }
     }
 
     static boolean isFile(ConfigMap fileCM) {
