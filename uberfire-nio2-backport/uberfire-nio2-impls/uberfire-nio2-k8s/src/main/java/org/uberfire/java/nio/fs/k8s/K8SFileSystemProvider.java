@@ -26,6 +26,8 @@ import java.util.Set;
 
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.uberfire.java.nio.IOException;
 import org.uberfire.java.nio.base.AbstractBasicFileAttributeView;
 import org.uberfire.java.nio.base.BasicFileAttributesImpl;
@@ -62,12 +64,13 @@ import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.deleteAndUpdatePar
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getFsObjCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getPathByFsObjCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.isDirectory;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.isRoot;
 
 public class K8SFileSystemProvider extends SimpleFileSystemProvider implements CloudClientFactory {
-
+    private static final Logger logger = LoggerFactory.getLogger(K8SFileSystemProvider.class);
     public K8SFileSystemProvider() {
         super(null, OSType.UNIX_LIKE);
-        this.fileSystem = new K8SFileSystem(this, "/");
+        this.fileSystem = new K8SFileSystem(this, K8SFileSystem.UNIX_SEPARATOR_STRING);
     }
 
     @Override
@@ -120,10 +123,11 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
         if (directoryCm.isPresent()) {
             throw new FileAlreadyExistsException(dir.toString());
         }
-
+        
         executeCloudFunction(client -> createOrReplaceFSCM(client, 
                                                            dir,
-                                                           createOrReplaceParentDirFSCM(client, dir, 0L, false),
+                                                           isRoot(dir) ? Optional.empty()
+                                                                       : createOrReplaceParentDirFSCM(client, dir, 0L, false),
                                                            Collections.emptyMap(),
                                                            true), 
                              KubernetesClient.class);
@@ -133,9 +137,12 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
     protected Path[] getDirectoryContent(final Path dir, final DirectoryStream.Filter<Path> filter) 
             throws NotDirectoryException {
         checkNotNull("dir", dir);
+        if (isRoot(dir)) {
+            initRoot();
+        }
         ConfigMap dirCM = executeCloudFunction(client -> getFsObjCM(client, dir), KubernetesClient.class)
                 .orElseThrow(() -> new NotDirectoryException(dir.toString()));
-        if (dirCM.getData().isEmpty()) {
+        if (dirCM.getData() == null || dirCM.getData().isEmpty()) {
             return new Path[0];
         }
         
@@ -150,6 +157,16 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
                                                             dirPathString.concat(separator)).concat(fileName), 
                                                             false))
                     .toArray(Path[]::new);
+    }
+    
+    private void initRoot() {
+        Path root = this.fileSystem.getPath(K8SFileSystem.UNIX_SEPARATOR_STRING);
+        try {
+            this.createDirectory(root);
+            logger.debug("Root directory created.");
+        } catch (FileAlreadyExistsException e) {
+            logger.debug("Root directory already exists.");
+        }
     }
 
     @Override

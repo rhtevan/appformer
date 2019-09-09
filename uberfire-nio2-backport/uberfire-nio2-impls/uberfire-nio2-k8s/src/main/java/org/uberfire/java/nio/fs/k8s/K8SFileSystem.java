@@ -16,12 +16,17 @@
 
 package org.uberfire.java.nio.fs.k8s;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.uberfire.java.nio.IOException;
+import org.uberfire.java.nio.file.LockableFileSystem;
 import org.uberfire.java.nio.file.WatchService;
 import org.uberfire.java.nio.file.spi.FileSystemProvider;
 import org.uberfire.java.nio.fs.file.SimpleUnixFileSystem;
 
-public class K8SFileSystem extends SimpleUnixFileSystem {
+public class K8SFileSystem extends SimpleUnixFileSystem implements LockableFileSystem {
+
+    private static final Logger logger = LoggerFactory.getLogger(K8SFileSystem.class);
 
     K8SFileSystem(final FileSystemProvider provider, final String path) {
         super(provider, path);
@@ -31,5 +36,15 @@ public class K8SFileSystem extends SimpleUnixFileSystem {
     @Override
     public WatchService newWatchService() throws UnsupportedOperationException, IOException {
         return new K8SWatchService(this);
+    }
+
+    @Override
+    public void lock() {
+        logger.debug("No impelementation");
+    }
+
+    @Override
+    public void unlock() {
+        logger.debug("No impelementation");
     }
 }

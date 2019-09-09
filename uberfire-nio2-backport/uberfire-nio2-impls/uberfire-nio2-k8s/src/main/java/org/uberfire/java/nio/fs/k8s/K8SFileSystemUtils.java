@@ -79,9 +79,8 @@ public class K8SFileSystemUtils {
         final long parentSize = parentContent.values().stream().mapToLong(Long::parseLong).sum();
 
         return Optional.of(createOrReplaceFSCM(client, parent,
-                                               parent.getRoot().equals(parent)
-                                                       ? Optional.empty()
-                                                       : createOrReplaceParentDirFSCM(client, parent, parentSize, false),
+                                               isRoot(parent) ? Optional.empty()
+                                                              : createOrReplaceParentDirFSCM(client, parent, parentSize, false),
                                                parentContent,
                                                true));
     }
@@ -271,6 +270,10 @@ public class K8SFileSystemUtils {
         } else {
             return pes;
         }
+    }
+
+    public static boolean isRoot(Path path) {
+        return path.getRoot().equals(path);
     }
 
     static boolean isFile(ConfigMap fileCM) {

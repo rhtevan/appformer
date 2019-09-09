@@ -75,11 +75,10 @@ public class K8SFileSystemTest {
 
     protected static final FileSystemProvider fsProvider = new K8SFileSystemProvider() {
 
-        @Override
-        public KubernetesClient createKubernetesClient() {
-            return CLIENT_FACTORY.get();
-        }
-
+            @Override
+            public KubernetesClient createKubernetesClient() {
+                return CLIENT_FACTORY.get();
+            }
     };
 
     protected String newFileWithContent(final Path newFile, final String testFileContent) throws IOException {
