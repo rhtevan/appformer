@@ -11,11 +11,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.uberfire.java.nio.base.WatchContext;
 import org.uberfire.java.nio.file.Path;
 import org.uberfire.java.nio.file.WatchEvent;
 import org.uberfire.java.nio.file.WatchEvent.Kind;
 import org.uberfire.java.nio.file.WatchKey;
 import org.uberfire.java.nio.file.Watchable;
+
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_NO_IMPL;
 
 @SuppressWarnings("serial")
 public class K8SWatchKey implements WatchKey {
@@ -24,7 +27,8 @@ public class K8SWatchKey implements WatchKey {
     private final AtomicReference<State> state = new AtomicReference<>(State.READY);
     private final AtomicBoolean valid = new AtomicBoolean(true);
     private final BlockingQueue<WatchEvent<?>> events = new LinkedBlockingQueue<>();
-    private final transient Map<Kind<Path>, Event> eventKinds = new ConcurrentHashMap<>();
+    @SuppressWarnings("rawtypes")
+    private final transient Map<Kind, Event> eventKinds = new ConcurrentHashMap<>();
 
     K8SWatchKey(K8SWatchService service, Path path) {
         this.service = service;
@@ -65,9 +69,10 @@ public class K8SWatchKey implements WatchKey {
         return this.path;
     }
 
-    protected boolean postEvent(WatchEvent.Kind<Path> kind) {
+    @SuppressWarnings("rawtypes")
+    protected boolean postEvent(WatchEvent.Kind kind) {
         Event event = eventKinds.computeIfAbsent(kind, k -> {
-            Event e = new Event(kind, K8SWatchKey.this.path.getFileName());
+            Event e = new Event(kind, new Context(K8SWatchKey.this.path.getFileName()));
             return events.offer(e) ? e : null;
         });
         if (event == null) {
@@ -91,19 +96,21 @@ public class K8SWatchKey implements WatchKey {
         SIGNALLED
     }
 
-    private static final class Event implements WatchEvent<Path> {
+    @SuppressWarnings("rawtypes")
+    private static final class Event implements WatchEvent<Context> {
 
         private final AtomicInteger count = new AtomicInteger(0);
-        private final transient Kind<Path> kind;
-        private final transient Path context;
+        private final transient Kind kind;
+        private final transient Context context;
 
-         private Event(Kind<Path> kind, Path context) {
+        private Event(Kind kind, Context context) {
             this.kind = kind;
             this.context = context;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public Kind<Path> kind() {
+        public Kind kind() {
             return this.kind;
         }
 
@@ -113,12 +120,45 @@ public class K8SWatchKey implements WatchKey {
         }
 
         @Override
-        public Path context() {
+        public Context context() {
             return this.context;
         }
 
         private int increaseCount() {
             return count.incrementAndGet();
+        }
+    }
+    
+    private static final class Context implements WatchContext {
+        private final Path path;
+        
+        private Context(Path path) {
+            this.path = path;
+        }
+        
+        @Override
+        public Path getPath() {
+            return this.path;
+        }
+
+        @Override
+        public Path getOldPath() {
+            return this.path;
+        }
+
+        @Override
+        public String getSessionId() {
+            return K8S_FS_NO_IMPL;
+        }
+
+        @Override
+        public String getMessage() {
+            return K8S_FS_NO_IMPL;
+        }
+
+        @Override
+        public String getUser() {
+            return K8S_FS_NO_IMPL;
         }
     }
 }

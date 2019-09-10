@@ -58,6 +58,7 @@ import static org.kie.soup.commons.validation.PortablePreconditions.checkConditi
 import static org.kie.soup.commons.validation.PortablePreconditions.checkNotNull;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_FSOBJ_CONTENT_KEY;
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_SCHEME;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceParentDirFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.deleteAndUpdateParentCM;
@@ -75,50 +76,55 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
 
     @Override
     public String getScheme() {
-        return "k8s";
+        return K8S_FS_SCHEME;
     }
 
     @Override
-    public InputStream newInputStream(final Path path,
+    public InputStream newInputStream(final Path pathIn,
                                       final OpenOption... options) throws IllegalArgumentException, 
         NoSuchFileException, IOException, SecurityException {
-        checkNotNull("path", path);
+        checkNotNull("path", pathIn);
+        Path path = toAbsoluteRealPath(pathIn);
         checkFileNotExistThenThrow(path, false);
+        logger.info("Open InputStream to file [{}]", path);
         return Channels.newInputStream(new K8SFileChannel(path, this));
     }
 
     @Override
-    public OutputStream newOutputStream(final Path path,
+    public OutputStream newOutputStream(final Path pathIn,
                                         final OpenOption... options) throws IllegalArgumentException, 
         UnsupportedOperationException, IOException, SecurityException {
-        checkNotNull("path", path);
+        checkNotNull("path", pathIn);
+        Path path = toAbsoluteRealPath(pathIn);
+        logger.info("Open OutputStream to file [{}]", path);
         return Channels.newOutputStream(new K8SFileChannel(path, this));
     }
 
     @Override
-    public FileChannel newFileChannel(final Path path,
+    public FileChannel newFileChannel(final Path pathIn,
                                       final Set<? extends OpenOption> options,
                                       final FileAttribute<?>... attrs) throws IllegalArgumentException, 
         UnsupportedOperationException, IOException, SecurityException {
-        checkNotNull("path", path);
+        checkNotNull("path", pathIn);
         throw new UnsupportedOperationException();
     }
     
     @Override
-    public SeekableByteChannel newByteChannel(final Path path,
+    public SeekableByteChannel newByteChannel(final Path pathIn,
                                               final Set<? extends OpenOption> options,
                                               final FileAttribute<?>... attrs) 
         throws IllegalArgumentException, UnsupportedOperationException, FileAlreadyExistsException, 
             IOException, SecurityException {
+        Path path = toAbsoluteRealPath(pathIn);
         return new K8SFileChannel(path, this);
     }
 
     @Override
-    public void createDirectory(final Path dir,
+    public void createDirectory(final Path dirIn,
                                 final FileAttribute<?>... attrs) throws UnsupportedOperationException, 
         FileAlreadyExistsException, IOException, SecurityException {
-        checkNotNull("dir",dir);
-
+        checkNotNull("dir",dirIn);
+        Path dir = toAbsoluteRealPath(dirIn);
         Optional<ConfigMap> directoryCm = executeCloudFunction(client -> getFsObjCM(client, dir), KubernetesClient.class);
         if (directoryCm.isPresent()) {
             throw new FileAlreadyExistsException(dir.toString());
@@ -134,10 +140,12 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
     }
 
     @Override
-    protected Path[] getDirectoryContent(final Path dir, final DirectoryStream.Filter<Path> filter) 
+    protected Path[] getDirectoryContent(final Path dirIn, final DirectoryStream.Filter<Path> filter) 
             throws NotDirectoryException {
-        checkNotNull("dir", dir);
-        if (isRoot(dir)) {
+        checkNotNull("dir", dirIn);
+        Path dir = toAbsoluteRealPath(dirIn);
+        if (isRoot(dir) &&
+            !executeCloudFunction(client -> getFsObjCM(client, dir), KubernetesClient.class).isPresent()) {
             initRoot();
         }
         ConfigMap dirCM = executeCloudFunction(client -> getFsObjCM(client, dir), KubernetesClient.class)
@@ -159,28 +167,26 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
                     .toArray(Path[]::new);
     }
     
-    private void initRoot() {
+    private synchronized void initRoot() {
         Path root = this.fileSystem.getPath(K8SFileSystem.UNIX_SEPARATOR_STRING);
-        try {
-            this.createDirectory(root);
-            logger.debug("Root directory created.");
-        } catch (FileAlreadyExistsException e) {
-            logger.debug("Root directory already exists.");
-        }
+        this.createDirectory(root);
+        logger.info("Root directory created.");
     }
 
     @Override
-    public void delete(final Path path, final DeleteOption... options) 
+    public void delete(final Path pathIn, final DeleteOption... options) 
             throws NoSuchFileException, DirectoryNotEmptyException, IOException, SecurityException {
-        checkNotNull("path", path);
+        checkNotNull("path", pathIn);
+        Path path = toAbsoluteRealPath(pathIn);
         checkFileNotExistThenThrow(path, false);
         deleteIfExists(path, options);
     }
 
     @Override
-    public boolean deleteIfExists(final Path path, final DeleteOption... options) 
+    public boolean deleteIfExists(final Path pathIn, final DeleteOption... options) 
             throws DirectoryNotEmptyException, IOException, SecurityException {
-        checkNotNull("path", path);
+        checkNotNull("path", pathIn);
+        Path path = toAbsoluteRealPath(pathIn);
         synchronized (this) {
             try {
                 return executeCloudFunction(client -> deleteAndUpdateParentCM(client, path), 
@@ -192,16 +198,17 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
     }
     
     @Override
-    public boolean isHidden(final Path path) throws IllegalArgumentException, IOException, SecurityException {
-        checkNotNull("path", path);
+    public boolean isHidden(final Path pathIn) throws IllegalArgumentException, IOException, SecurityException {
+        checkNotNull("path", pathIn);
         return false;
     }
 
     @Override
-    public void checkAccess(final Path path, AccessMode... modes) throws UnsupportedOperationException,
+    public void checkAccess(final Path pathIn, AccessMode... modes) throws UnsupportedOperationException,
         NoSuchFileException, AccessDeniedException, IOException, SecurityException {
-        checkNotNull("path", path);
+        checkNotNull("path", pathIn);
         checkNotNull("modes", modes);
+        Path path = toAbsoluteRealPath(pathIn);
         checkFileNotExistThenThrow(path, false);
 
         for (final AccessMode mode : modes) {
@@ -210,7 +217,7 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
                 case READ:
                     break;
                 case EXECUTE:
-                    throw new AccessDeniedException(path.toRealPath().toString());
+                    throw new AccessDeniedException(path.toString());
                 case WRITE:
                     break;
             }
@@ -218,18 +225,20 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
     }
 
     @Override
-    public FileStore getFileStore(final Path path) throws IOException, SecurityException {
-        checkNotNull("path", path);
+    public FileStore getFileStore(final Path pathIn) throws IOException, SecurityException {
+        checkNotNull("path", pathIn);
+        Path path = toAbsoluteRealPath(pathIn);
         return new K8SFileStore(path);
     }
 
     @Override
-    public <A extends BasicFileAttributes> A readAttributes(final Path path,
+    public <A extends BasicFileAttributes> A readAttributes(final Path pathIn,
                                                             final Class<A> type,
                                                             final LinkOption... options) 
         throws NoSuchFileException, UnsupportedOperationException, IOException, SecurityException {
-        checkNotNull("path", path);
+        checkNotNull("path", pathIn);
         checkNotNull("type", type);
+        Path path = toAbsoluteRealPath(pathIn);
         checkFileNotExistThenThrow(path, false);
         if (type == BasicFileAttributesImpl.class || type == BasicFileAttributes.class) {
             final K8SBasicFileAttributeView view = getFileAttributeView(path,
@@ -254,13 +263,15 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
     }
     
     @Override
-    public void copy(final Path source,
-                     final Path target,
+    public void copy(final Path sourceIn,
+                     final Path targetIn,
                      final CopyOption... options) throws UnsupportedOperationException, 
         FileAlreadyExistsException, DirectoryNotEmptyException, IOException, SecurityException {
-        checkNotNull("source", source);
-        checkNotNull("target", target);
-        
+        checkNotNull("source", sourceIn);
+        checkNotNull("target", targetIn);
+        Path source = toAbsoluteRealPath(sourceIn);
+        Path target = toAbsoluteRealPath(targetIn);
+
         Optional<ConfigMap> srcCMOpt = executeCloudFunction(
             client -> getFsObjCM(client, source), KubernetesClient.class);
         checkCondition("source must exist", srcCMOpt.isPresent());
@@ -282,10 +293,12 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
     }
 
     @Override
-    public void move(final Path source,
-                     final Path target,
+    public void move(final Path sourceIn,
+                     final Path targetIn,
                      final CopyOption... options) throws DirectoryNotEmptyException, 
         AtomicMoveNotSupportedException, IOException, SecurityException {
+        Path source = toAbsoluteRealPath(sourceIn);
+        Path target = toAbsoluteRealPath(targetIn);
         try {
             copy(source, target);
         } catch (Exception e) {
@@ -308,16 +321,34 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
     }
     
     @Override
-    protected void checkFileNotExistThenThrow(final Path path, boolean isLink) 
+    protected void checkFileNotExistThenThrow(final Path pathIn, boolean isLink) 
             throws NoSuchFileException, NotLinkException {
+        Path path = toAbsoluteRealPath(pathIn);
         executeCloudFunction(client -> getFsObjCM(client, path), KubernetesClient.class)
-            .orElseThrow(() -> new NoSuchFileException(path.toRealPath().toString()));
+            .orElseThrow(() -> {
+                logger.info("File not found [{}]", path.toUri().toString());
+                return new NoSuchFileException(path.toUri().toString());
+            });
     }
 
     @Override
-    protected void checkFileExistsThenThrow(final Path path) throws FileAlreadyExistsException {
+    protected void checkFileExistsThenThrow(final Path pathIn) throws FileAlreadyExistsException {
+        Path path = toAbsoluteRealPath(pathIn);
         if (executeCloudFunction(client -> getFsObjCM(client, path), KubernetesClient.class).isPresent()) {
-            throw new FileAlreadyExistsException(path.toRealPath().toString());
+            throw new FileAlreadyExistsException(path.toString());
         }
+    }
+
+    protected Path toAbsoluteRealPath(Path path) {
+        if (path.isAbsolute()) {
+            if (path.getParent() == null) {
+                return path; // Root
+            } else if (path.getParent().toString().contains(".")) {
+                fileSystem.getPath(path.toRealPath().toString());
+            } else {
+                return path; // RealPath
+            }
+        }
+        return fileSystem.getPath(path.toAbsolutePath().toRealPath().toString());
     }
 }

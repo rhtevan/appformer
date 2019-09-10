@@ -19,10 +19,15 @@ package org.uberfire.java.nio.fs.k8s;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.uberfire.java.nio.IOException;
+import org.uberfire.java.nio.base.GeneralPathImpl;
+import org.uberfire.java.nio.file.InvalidPathException;
 import org.uberfire.java.nio.file.LockableFileSystem;
+import org.uberfire.java.nio.file.Path;
 import org.uberfire.java.nio.file.WatchService;
 import org.uberfire.java.nio.file.spi.FileSystemProvider;
 import org.uberfire.java.nio.fs.file.SimpleUnixFileSystem;
+
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_NO_IMPL;
 
 public class K8SFileSystem extends SimpleUnixFileSystem implements LockableFileSystem {
 
@@ -34,17 +39,26 @@ public class K8SFileSystem extends SimpleUnixFileSystem implements LockableFileS
     }
 
     @Override
+    public Path getPath(String first, String... more) throws InvalidPathException {
+        if (UNIX_SEPARATOR_STRING.equals(first)) {
+            return GeneralPathImpl.createRoot(this, UNIX_SEPARATOR_STRING, false);
+        } else {
+            return super.getPath(first, more);
+        }
+    }
+
+    @Override
     public WatchService newWatchService() throws UnsupportedOperationException, IOException {
         return new K8SWatchService(this);
     }
 
     @Override
     public void lock() {
-        logger.debug("No impelementation");
+        logger.debug(K8S_FS_NO_IMPL);
     }
 
     @Override
     public void unlock() {
-        logger.debug("No impelementation");
+        logger.debug(K8S_FS_NO_IMPL);
     }
 }

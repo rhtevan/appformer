@@ -68,6 +68,7 @@ public class K8SFileSystemUtils {
         String selfName = getFileNameString(self);
         Path parent = Optional.ofNullable(self.getParent()).orElseThrow(IllegalArgumentException::new);
         Map<String, String> parentContent = Optional.ofNullable(getFsObjCM(client, parent))
+                .filter(K8SFileSystemUtils::isDirectory)
                 .map(ConfigMap::getData)
                 .orElseGet(HashMap::new);
         
@@ -106,7 +107,7 @@ public class K8SFileSystemUtils {
                             .orElseThrow(() -> new IllegalStateException("File [" +
                                                                          fileName +
                                                                          "] is not found at parent directory [" +
-                                                                         path.toRealPath().getParent().toString() +
+                                                                         path.getParent().toString() +
                                                                          "]"));
         }
         labels.put(CFG_MAP_LABEL_FSOBJ_APP_KEY, APP_NAME);
@@ -195,13 +196,15 @@ public class K8SFileSystemUtils {
         } catch (UnsupportedEncodingException e) {
             logger.warn("Invalid encoding [{}], returns zero length byte array content.",
                         CloudClientConstants.ENCODING);
+        } catch (Exception e) {
+            logger.error("Retrieve content from FsOjbCM [{}] failed, due to", cm, e);
         }
         return content;
     }
 
     static Map<String, String> getFsObjNameElementLabel(Path path) {
         Map<String, String> labels = new ConcurrentHashMap<>();
-        path.toAbsolutePath().toRealPath().iterator().forEachRemaining(
+        path.iterator().forEachRemaining(
             pathElement -> validateAndBuildPathLabel(labels, pathElement));
         return labels;
     }
@@ -273,9 +276,9 @@ public class K8SFileSystemUtils {
     }
 
     public static boolean isRoot(Path path) {
-        return path.getRoot().equals(path);
+        return path.getParent() == null;
     }
-
+    
     static boolean isFile(ConfigMap fileCM) {
         return K8SFileSystemObjectType.FILE.toString()
                                            .equals(fileCM.getMetadata()
@@ -295,7 +298,8 @@ public class K8SFileSystemUtils {
                               .getOrDefault(CFG_MAP_LABEL_FSOBJ_TYPE_KEY, UNKNOWN.toString()));
     }
     
-    static Optional<Kind<Path>> mapActionToKind(Action action) {
+    @SuppressWarnings("rawtypes")
+    static Optional<Kind> mapActionToKind(Action action) {
         switch(action) {
             case ADDED:
                 return Optional.of(StandardWatchEventKind.ENTRY_CREATE);

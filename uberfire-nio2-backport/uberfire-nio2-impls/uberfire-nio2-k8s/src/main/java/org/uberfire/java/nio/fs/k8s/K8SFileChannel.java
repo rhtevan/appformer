@@ -42,6 +42,7 @@ public class K8SFileChannel extends SeekableInMemoryByteChannel {
         // Constructor is not necessarily Thread-Safe as per JLS (Java Language Specification)
         synchronized(this) {
             this.contents = ccf.executeCloudFunction(client -> getFsObjCM(client, file), KubernetesClient.class)
+                               .filter(K8SFileSystemUtils::isFile)
                                .map(K8SFileSystemUtils::getFsObjContentBytes)
                                .orElse(new byte[0]);
         }

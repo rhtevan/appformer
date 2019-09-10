@@ -20,7 +20,6 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -54,7 +53,6 @@ import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.CFG_MAP_LABEL_
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.createOrReplaceParentDirFSCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getCreationTime;
-import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getFileNameString;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getFsObjCM;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getFsObjContentBytes;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getFsObjNameElementLabel;
@@ -129,24 +127,6 @@ public class K8SFileSystemTest {
         final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));
         final Path root = fileSystem.getPath("/");
         assertThat(root.getFileSystem().provider()).isEqualTo(fsProvider);
-    }
-
-    @Test
-    public void testRoot() throws URISyntaxException {
-        final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));
-        final Path root = fileSystem.getPath("/");
-        Map<String, String> ne = getFsObjNameElementLabel(root);
-
-        assertThat(root).isEqualTo(fileSystem.getPath("/path").getRoot());
-        assertThat(root.getRoot().equals(root)).isTrue();
-        assertThat(root.toString().equals("/")).isTrue();
-        assertThat(root.toRealPath().toString().equals("/")).isTrue();
-        assertThat(root.getParent()).isNull();
-        assertThat(root.getFileName()).isNull();
-        assertThat(root.getNameCount()).isEqualTo(0);
-        assertThat(root.iterator().hasNext()).isEqualTo(false);
-        assertThat(ne.size()).isEqualTo(0);
-        assertThat(getFileNameString(root).equals("/")).isTrue();
     }
 
     @Test
@@ -242,7 +222,7 @@ public class K8SFileSystemTest {
     public void testGetFsObjNameElement() {
         final FileSystem fileSystem = fsProvider.getFileSystem(URI.create("default:///"));
         final Path aFile = fileSystem.getPath("/testDir/../testDir/./testFile");
-        Map<String, String> ne = getFsObjNameElementLabel(aFile);
+        Map<String, String> ne = getFsObjNameElementLabel(((K8SFileSystemProvider)fsProvider).toAbsoluteRealPath(aFile));
         assertThat(ne.size()).isEqualTo(2);
         assertThat(ne.containsValue("testDir")).isTrue();
         assertThat(ne.containsValue("testFile")).isTrue();
@@ -264,14 +244,14 @@ public class K8SFileSystemTest {
 
     @Test
     public void testGetPathByFsObjCM() {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path f = kfs.getPath("/testDir/testFile");
         assertThat(f.getRoot()).isNotNull();
         assertThat(f.getNameCount()).isEqualTo(2);
         assertThat(f.getParent()).isEqualTo(kfs.getPath("/testDir"));
         assertThat(f.getName(0).toString()).isEqualTo("testDir");
         assertThat(f.getName(1).toString()).isEqualTo("testFile");
-        assertThat(f.toUri().toString()).isEqualTo("k8s:///testDir/testFile");
+        assertThat(f.toUri().toString()).isEqualTo(fsProvider.getScheme() + ":///testDir/testFile");
         
         ConfigMap rootCM = CLIENT_FACTORY.get().configMaps().inNamespace(TEST_NAMESPACE)
                 .withName("k8s-fsobj-e6bb5ba5-527f-11e9-8a93-8c16458eff35").get();
@@ -307,7 +287,7 @@ public class K8SFileSystemTest {
     
     @Test
     public void testFileMetadata() {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path d = kfs.getPath("/testDir");
         final Path f = kfs.getPath("/testDir/testFile");
         final Path e = kfs.getPath("/doesNotExist");
@@ -326,7 +306,7 @@ public class K8SFileSystemTest {
     
     @Test
     public void testDelete() throws IOException {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path f = kfs.getPath("/testDeleteFile");
 
         String testFileContent = "Hello World";
@@ -339,7 +319,7 @@ public class K8SFileSystemTest {
 
     @Test(expected = NoSuchFileException.class)
     public void testDeleteNotExistingFile() {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path f = kfs.getPath("/testDeleteNotExistingFile");
 
         Files.delete(f);
@@ -347,7 +327,7 @@ public class K8SFileSystemTest {
 
     @Test
     public void testDeleteIfExists() throws IOException {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path f = kfs.getPath("/testDeleteIfExists");
 
         assertThat(Files.deleteIfExists(f)).isFalse();
@@ -362,7 +342,7 @@ public class K8SFileSystemTest {
 
     @Test
     public void testCopy() throws IOException {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path src = kfs.getPath("/testCopySrc");
         final Path target = kfs.getPath("/testCopyTarget");
         
@@ -378,7 +358,7 @@ public class K8SFileSystemTest {
 
     @Test
     public void testMove() throws IOException {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path src = kfs.getPath("/testMoveSrc");
         final Path target = kfs.getPath("/testMoveTarget");
         
@@ -395,7 +375,7 @@ public class K8SFileSystemTest {
     
     @Test
     public void testCreateAndReadDir() {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path testDir = kfs.getPath("/testDir");
         final Path testFile = kfs.getPath("/testDir/testFile");
         final Path aDir = kfs.getPath("/.testCreateAndReadDir");
@@ -419,7 +399,7 @@ public class K8SFileSystemTest {
     
     @Test
     public void testOverwriteFile() throws IOException {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path testFile = kfs.getPath("/testOverwriteFile");
         final String content = "Large content, blah, blah, blah...";
         final String smallerContent = "Small";
@@ -482,7 +462,7 @@ public class K8SFileSystemTest {
     
     @Test
     public void testFileNameValidation() {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path invalid = kfs.getPath("/#weirdFileName$@#^&*");
         final Path hidden = kfs.getPath("/.testFileNameValidation");
         
@@ -498,7 +478,7 @@ public class K8SFileSystemTest {
     
     @Test
     public void testCreateHiddenFile() throws IOException {
-        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("k8s:///"));
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path hidden = kfs.getPath("/.testCreateHiddenDir/.testCreateHiddenFile");
         
         newFileWithContent(hidden, "blah...");

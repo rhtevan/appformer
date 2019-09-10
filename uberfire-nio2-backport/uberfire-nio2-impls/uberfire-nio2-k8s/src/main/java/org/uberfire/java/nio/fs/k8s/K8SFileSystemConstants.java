@@ -26,17 +26,25 @@ public class K8SFileSystemConstants {
     public static final String CFG_MAP_LABEL_FSOBJ_APP_KEY = "k8s.fs.nio.java.uberfire.org/fsobj-app";
     public static final String CFG_MAP_LABEL_FSOBJ_NAME_KEY_PREFIX = "k8s.fs.nio.java.uberfire.org/fsobj-name-";
     public static final String CFG_MAP_ANNOTATION_FSOBJ_SIZE_KEY = "k8s.fs.nio.java.uberfire.org/fsobj-size";
-    public static final String CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY =
-            "k8s.fs.nio.java.uberfire.org/fsobj-lastModifiedTimestamp";
+    public static final String CFG_MAP_ANNOTATION_FSOBJ_LAST_MODIFIED_TIMESTAMP_KEY = "k8s.fs.nio.java.uberfire.org/fsobj-lastModifiedTimestamp";
     public static final String CFG_MAP_FSOBJ_NAME_PREFIX = "k8s-fsobj-";
     public static final String CFG_MAP_FSOBJ_CONTENT_KEY = "fsobj-content";
 
     public static final String K8S_FS_MAX_CAPACITY_PROPERTY_NAME = "org.uberfire.java.nio.fs.k8s.max.file.size";
     public static final String K8S_FS_APP_PROPERTY_NAME = "org.uberfire.java.nio.fs.k8s.app";
     public static final String K8S_FS_APP_DEFAULT_VALUE = "unknown";
-    
+
     public static final Pattern K8S_FS_NAME_RESTRICATION = Pattern.compile("(([A-Za-z0-9.][-A-Za-z0-9_.]*)?[A-Za-z0-9])?");
-    public static final int K8S_FS_NAME_MAX_LENGTH = 63;
     public static final String K8S_FS_HIDDEN_FILE_INDICATOR = ".";
     public static final String K8S_FS_HIDDEN_FILE_INDICATOR_SUFFIX = "0";
+    
+    /**
+     * Due to the hard coded dependency on jGit impl, using 'git' scheme for before issue being fixed
+     * https://github.com/kiegroup/appformer/blob/92d05f8620fb775a9fdd96574273de2deda3d215/uberfire-backend/uberfire-backend-cdi/src/main/java/org/uberfire/backend/server/cdi/SystemConfigProducer.java#L410
+     */
+    public static final String K8S_FS_SCHEME = "git";
+//    public static final String K8S_FS_SCHEME = "k8s"; 
+    public static final String K8S_FS_NO_IMPL = "Not implemented";
+
+    public static final int K8S_FS_NAME_MAX_LENGTH = 63;
 }

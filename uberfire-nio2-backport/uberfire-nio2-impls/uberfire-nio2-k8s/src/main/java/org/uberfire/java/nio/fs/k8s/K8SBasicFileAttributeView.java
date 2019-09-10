@@ -18,6 +18,8 @@ package org.uberfire.java.nio.fs.k8s;
 
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.uberfire.java.nio.IOException;
 import org.uberfire.java.nio.base.BasicFileAttributesImpl;
 import org.uberfire.java.nio.base.FileTimeImpl;
@@ -29,9 +31,12 @@ import org.uberfire.java.nio.file.attribute.BasicFileAttributes;
 import org.uberfire.java.nio.fs.cloud.CloudClientFactory;
 import org.uberfire.java.nio.fs.file.SimpleBasicFileAttributeView;
 
+import static org.uberfire.java.nio.fs.k8s.K8SFileSystemConstants.K8S_FS_NO_IMPL;
 import static org.uberfire.java.nio.fs.k8s.K8SFileSystemUtils.getFsObjCM;
 
 public class K8SBasicFileAttributeView extends SimpleBasicFileAttributeView {
+    
+    private static final Logger logger = LoggerFactory.getLogger(K8SBasicFileAttributeView.class);
 
     private BasicFileAttributes attrs = null;
     private final CloudClientFactory ccf;
@@ -67,6 +72,11 @@ public class K8SBasicFileAttributeView extends SimpleBasicFileAttributeView {
                                                      K8SFileSystemUtils.isDirectory(fileCM));
         }
         return (T) attrs;
+    }
+
+    @Override
+    public void setAttribute(String attribute, Object value) throws IOException {
+        logger.debug(K8S_FS_NO_IMPL);
     }
 
     @SuppressWarnings("unchecked")
