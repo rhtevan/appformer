@@ -297,7 +297,7 @@ public class K8SFileSystemUtils {
                               .getLabels()
                               .getOrDefault(CFG_MAP_LABEL_FSOBJ_TYPE_KEY, UNKNOWN.toString()));
     }
-    
+
     @SuppressWarnings("rawtypes")
     static Optional<Kind> mapActionToKind(Action action) {
         switch(action) {

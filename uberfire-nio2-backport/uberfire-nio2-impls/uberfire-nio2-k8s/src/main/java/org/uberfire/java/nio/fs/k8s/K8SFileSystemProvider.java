@@ -200,7 +200,8 @@ public class K8SFileSystemProvider extends SimpleFileSystemProvider implements C
     @Override
     public boolean isHidden(final Path pathIn) throws IllegalArgumentException, IOException, SecurityException {
         checkNotNull("path", pathIn);
-        return false;
+        checkFileNotExistThenThrow(pathIn, false);
+        return pathIn.getFileName().toString().startsWith(K8SFileSystemConstants.K8S_FS_HIDDEN_FILE_INDICATOR);
     }
 
     @Override

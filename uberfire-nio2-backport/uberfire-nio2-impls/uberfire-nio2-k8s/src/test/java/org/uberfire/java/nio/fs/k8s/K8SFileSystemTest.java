@@ -246,6 +246,7 @@ public class K8SFileSystemTest {
     public void testGetPathByFsObjCM() {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path f = kfs.getPath("/testDir/testFile");
+
         assertThat(f.getRoot()).isNotNull();
         assertThat(f.getNameCount()).isEqualTo(2);
         assertThat(f.getParent()).isEqualTo(kfs.getPath("/testDir"));
@@ -284,7 +285,7 @@ public class K8SFileSystemTest {
         assertThat(isFile(cfm)).isFalse();
         assertThat(isDirectory(cfm)).isTrue();
     }
-    
+
     @Test
     public void testFileMetadata() {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
@@ -372,12 +373,26 @@ public class K8SFileSystemTest {
         assertThat(getFsObjCM(CLIENT_FACTORY.get(), target).getData()
                    .get(CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
     }
-    
+
     @Test
     public void testCreateAndReadDir() {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path testDir = kfs.getPath("/testDir");
         final Path testFile = kfs.getPath("/testDir/testFile");
+
+        assertThat(Files.exists(testDir)).isTrue();
+        assertThat(Files.isDirectory(testDir)).isTrue();
+        assertThat(Files.isHidden(testDir)).isFalse();
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(testDir)) {
+            ArrayList<Path> dirContent = Lists.newArrayList(stream);
+            assertThat(dirContent).asList().containsExactly(testFile);
+        }
+    }
+
+    @Test
+    public void testCreateAndReadHiddenDir() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path aDir = kfs.getPath("/.testCreateAndReadDir");
         final Path root = aDir.getRoot();
         
@@ -385,18 +400,28 @@ public class K8SFileSystemTest {
         
         assertThat(Files.exists(aDir)).isTrue();
         assertThat(Files.isDirectory(aDir)).isTrue();
+        assertThat(Files.isHidden(aDir)).isTrue();
 
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
             ArrayList<Path> dirContent = Lists.newArrayList(stream);
             assertThat(dirContent).asList().contains(aDir);
         }
-
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(testDir)) {
-            ArrayList<Path> dirContent = Lists.newArrayList(stream);
-            assertThat(dirContent).asList().containsExactly(testFile);
-        }
     }
-    
+
+    @Test
+    public void testCreateDuplicateDirectory() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path testDir = kfs.getPath("/testCreateDuplicateDirectory");
+
+        Files.createDirectory(testDir);
+
+        assertThat(Files.exists(testDir)).isTrue();
+        assertThat(Files.isDirectory(testDir)).isTrue();
+
+        assertThat(catchThrowable(() -> Files.createDirectory(testDir)))
+            .isInstanceOf(org.uberfire.java.nio.file.FileAlreadyExistsException.class);
+    }
+
     @Test
     public void testOverwriteFile() throws IOException {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
@@ -465,6 +490,7 @@ public class K8SFileSystemTest {
         final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
         final Path invalid = kfs.getPath("/#weirdFileName$@#^&*");
         final Path hidden = kfs.getPath("/.testFileNameValidation");
+        final Path tooLongFileName = kfs.getPath("/testFileNameValidationForTooLongFileNameWhichIsLongerThanSixtyThreeCharacters");
         
         assertThat(catchThrowable(() -> validateAndBuildPathLabel(new HashMap<String, String>(), invalid.getFileName())))
             .isInstanceOf(InvalidPathException.class);
@@ -472,6 +498,9 @@ public class K8SFileSystemTest {
             .isNull();
         
         assertThat(catchThrowable(() -> newFileWithContent(invalid, "blah...")))
+            .isInstanceOf(org.uberfire.java.nio.IOException.class)
+            .hasRootCauseInstanceOf(InvalidPathException.class);
+        assertThat(catchThrowable(() -> newFileWithContent(tooLongFileName, "blah...")))
             .isInstanceOf(org.uberfire.java.nio.IOException.class)
             .hasRootCauseInstanceOf(InvalidPathException.class);
     }
@@ -484,6 +513,93 @@ public class K8SFileSystemTest {
         newFileWithContent(hidden, "blah...");
         ConfigMap cm = getFsObjCM(CLIENT_FACTORY.get(), hidden);
         assertThat(Files.exists(hidden)).isTrue();
+        assertThat(Files.isHidden(hidden)).isTrue();
         assertThat(getPathByFsObjCM(kfs, cm)).isEqualTo(hidden); 
+    }
+
+    @Test
+    public void testCopyHiddenFile() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path src = kfs.getPath("/.testCopyHiddenFileSrcFile");
+        final Path target = kfs.getPath("/.testCopyHiddenFileTargetFile");
+
+        String testFileContent = "Test copy capability";
+        newFileWithContent(src, testFileContent);
+
+        Files.copy(src, target);
+
+        assertThat(Files.exists(target)).isTrue();
+        assertThat(Files.isHidden(target)).isTrue();
+        assertThat(getFsObjCM(CLIENT_FACTORY.get(), target).getData()
+                   .get(CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
+    }
+
+    @Test
+    public void testMoveHiddenFile() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path src = kfs.getPath("/.testMoveHiddenFileSrc");
+        final Path targetPublic = kfs.getPath("/testMoveHiddenFileTargetPublic");
+        final Path targetHidden = kfs.getPath("/.testMoveHiddenFileTargetHidden");
+
+        String testFileContent = "Test move capability";
+        newFileWithContent(src, testFileContent);
+
+        Files.move(src, targetPublic);
+
+        assertThat(Files.notExists(src)).isTrue();
+        assertThat(Files.exists(targetPublic)).isTrue();
+        assertThat(Files.isHidden(targetPublic)).isFalse();
+        assertThat(getFsObjCM(CLIENT_FACTORY.get(), targetPublic).getData()
+                   .get(CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
+
+        Files.move(targetPublic, targetHidden);
+
+        assertThat(Files.notExists(targetPublic)).isTrue();
+        assertThat(Files.exists(targetHidden)).isTrue();
+        assertThat(Files.isHidden(targetHidden)).isTrue();
+        assertThat(getFsObjCM(CLIENT_FACTORY.get(), targetHidden).getData()
+                   .get(CFG_MAP_FSOBJ_CONTENT_KEY)).isEqualTo(testFileContent);
+    }
+
+    @Test
+    public void testReadNotExistingFile() throws IOException {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path testFile = kfs.getPath("/testReadNotExistingFile");
+
+        assertThat(catchThrowable(() -> Files.newBufferedReader(testFile, Charset.forName("UTF-8"))))
+            .isInstanceOf(org.uberfire.java.nio.file.NoSuchFileException.class);
+    }
+
+    @Test
+    public void testIsHiddenNotExistingFile() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path testFile = kfs.getPath("/testIsHiddenNotExistingFile");
+
+        assertThat(catchThrowable(() -> Files.isHidden(testFile)))
+            .isInstanceOf(org.uberfire.java.nio.IOException.class);
+    }
+
+    @Test
+    public void testIsHiddenManyNestedFolders() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path testFolder11 = kfs.getPath("/testIsHiddenManyNestedFolders/1/2/3/4/5/6/7/8/9/10/11");
+        final Path testFolder12 = kfs.getPath("/testIsHiddenManyNestedFolders/1/2/3/4/5/6/7/8/9/10/11/.12");
+
+        Files.createDirectory(testFolder12);
+
+        assertThat(Files.isHidden(testFolder11)).isFalse();
+        assertThat(Files.isHidden(testFolder12)).isTrue();
+    }
+
+    @Test
+    public void testGetDirectoryContentManyNestedFolders() {
+        final K8SFileSystem kfs = (K8SFileSystem) fsProvider.getFileSystem(URI.create("default:///"));
+        final Path testFolder11 = kfs.getPath("/testIsHiddenManyNestedFolders/1/2/3/4/5/6/7/8/9/10/11");
+        final Path testFolder12 = kfs.getPath("/testIsHiddenManyNestedFolders/1/2/3/4/5/6/7/8/9/10/11/12");
+
+        Files.createDirectory(testFolder12);
+
+        Path[] directoryContent = ((K8SFileSystemProvider)fsProvider).getDirectoryContent(testFolder11, null);
+        assertThat(directoryContent).contains(testFolder12);
     }
 }
